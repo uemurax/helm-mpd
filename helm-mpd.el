@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-02-13 23:59:36 tuemura>
+;; Time-stamp: <2016-02-14 00:20:36 tuemura>
 ;;
 ;;; Code:
 
@@ -67,7 +67,40 @@
   (interactive (helm-mpd-read-host-and-port))
   (helm-mpd-with-conn (conn host port)
                       (helm :sources (helm-mpd-build-current-playlist-source conn)
-                            :buffer "*helm mpd*")))
+                            :buffer "*helm-mpd-current-playlist*")))
+
+;; ----------------------------------------------------------------
+;; Libraries
+;; ----------------------------------------------------------------
+
+(defun helm-mpd-library-candidates (conn)
+  "Get all files and directories in the MPD database."
+  (let ((ls nil))
+    (mpd-list-directory-recursive conn (lambda (obj directoryp)
+                                         (push (cons obj (cons (if directoryp
+                                                                   'directory
+                                                                 'file)
+                                                               obj))
+                                               ls)))
+    ls))
+
+(defun helm-mpd-library-actions (conn)
+  (helm-make-actions
+   "Enqueue song(s)" (lambda (_ignore)
+                       (dolist (obj (helm-marked-candidates))
+                         (mpd-enqueue conn (cdr obj))))))
+
+(defun helm-mpd-build-library-source (conn)
+  (helm-build-sync-source "Library"
+    :candidates (helm-mpd-library-candidates conn)
+    :action (helm-mpd-library-actions conn)))
+
+(defun helm-mpd-library (host port)
+  "Helm for MPD library."
+  (interactive (helm-mpd-read-host-and-port))
+  (helm-mpd-with-conn (conn host port)
+                      (helm :sources (helm-mpd-build-library-source conn)
+                            :buffer "*helm-mpd-library*")))
 
 (provide 'helm-mpd)
 
