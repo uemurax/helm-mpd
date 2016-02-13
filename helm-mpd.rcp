@@ -1,0 +1,6 @@
+(:name helm-mpd
+       :type github
+       :pkgname "uemurax/helm-mpd"
+       :depends (libmpdee helm)
+       :description "Helm interface for MPD"
+       :website "https://github.com/uemurax/helm-mpd")

@@ -1,0 +1,5 @@
+(:name libmpdee
+       :type github
+       :pkgname "andyetitmoves/libmpdee"
+       :description "An Emacs client library for mpd"
+       :website "https://github.com/andyetitmoves/libmpdee")
