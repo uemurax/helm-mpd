@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-02-14 00:58:34 tuemura>
+;; Time-stamp: <2016-02-14 02:07:14 tuemura>
 ;;
 ;;; Code:
 
@@ -48,7 +48,18 @@
    "Play song" (lambda (song) (mpd-play conn (getf song 'Id) t))
    "Delete song(s)" (lambda (_ignore)
                       (dolist (song (helm-marked-candidates))
-                        (mpd-delete conn (getf song 'Id) t)))))
+                        (mpd-delete conn (getf song 'Id) t)))
+   "Swap song(s)" (lambda (first)
+                    (let ((cs (helm-marked-candidates))
+                          (second nil))
+                      (cond ((= (length cs) 2)
+                             (setq first (car cs)
+                                   second (cadr cs)))
+                            ((and (= (length cs) 1) (not (eq first (car cs))))
+                             (setq second (car cs))))
+                      (if second
+                          (mpd-swap conn (list (getf first 'Id)) (list (getf second 'Id)) t)
+                        (message "That action can be performed only with two candidates."))))))
 
 (defun helm-mpd-current-playlist-candidates (conn)
   "Get current playlist."
