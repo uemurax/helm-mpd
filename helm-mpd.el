@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-02-13 23:58:25 tuemura>
+;; Time-stamp: <2016-02-13 23:59:36 tuemura>
 ;;
 ;;; Code:
 
@@ -68,5 +68,7 @@
   (helm-mpd-with-conn (conn host port)
                       (helm :sources (helm-mpd-build-current-playlist-source conn)
                             :buffer "*helm mpd*")))
+
+(provide 'helm-mpd)
 
 ;;; helm-mpd.el ends here.
