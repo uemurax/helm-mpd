@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-02-14 00:30:36 tuemura>
+;; Time-stamp: <2016-02-14 00:58:34 tuemura>
 ;;
 ;;; Code:
 
@@ -102,6 +102,47 @@
                             :buffer "*helm-mpd-library*")))
 
 ;; ----------------------------------------------------------------
+;; Play lists
+;; ----------------------------------------------------------------
+
+(defun helm-mpd-playlist-candidates (conn)
+  "Get all playlists."
+  (let ((ls nil))
+    (mpd-get-directory-info conn nil
+                            (lambda (obj type)
+                              (when (eq type 'playlist)
+                                (push obj ls))))
+    ls))
+
+(defun helm-mpd-new-playlist-actions (conn)
+  (helm-make-actions
+   "Save current playlist to file" (lambda (pname)
+                                     (mpd-save-playlist conn pname))))
+
+(defun helm-mpd-playlist-actions (conn)
+  (helm-make-actions
+   "Load playlist(s)" (lambda (_ignore)
+                        (mpd-load-playlist conn (helm-marked-candidates)))
+   "Remove playlist(s)" (lambda (_ignore)
+                          (mpd-remove-playlist conn (helm-marked-candidates)))))
+
+(defun helm-mpd-build-playlist-source (conn)
+  (helm-build-sync-source "Playlists"
+    :candidates (helm-mpd-playlist-candidates conn)
+    :action (helm-mpd-playlist-actions conn)))
+
+(defun helm-mpd-build-new-playlist-source (conn)
+  (helm-build-dummy-source "Create playlist"
+    :action (helm-mpd-new-playlist-actions conn)))
+
+(defun helm-mpd-playlist (host port)
+  (interactive (helm-mpd-read-host-and-port))
+  (helm-mpd-with-conn (conn helm-mpd-host helm-mpd-port)
+                      (helm :sources (list (helm-mpd-build-playlist-source conn)
+                                           (helm-mpd-build-new-playlist-source conn))
+                            :buffer "*helm-mpd-playlist*")))
+
+;; ----------------------------------------------------------------
 ;; Put together
 ;; ----------------------------------------------------------------
 
@@ -110,7 +151,9 @@
   (interactive (helm-mpd-read-host-and-port))
   (helm-mpd-with-conn (conn host port)
                       (helm :sources (list (helm-mpd-build-current-playlist-source conn)
-                                           (helm-mpd-build-library-source conn))
+                                           (helm-mpd-build-library-source conn)
+                                           (helm-mpd-build-playlist-source conn)
+                                           (helm-mpd-build-new-playlist-source conn))
                             :buffer "*helm-mpd*")))
 
 (provide 'helm-mpd)
