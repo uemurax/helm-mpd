@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-02-14 02:09:24 tuemura>
+;; Time-stamp: <2016-02-14 02:11:50 tuemura>
 ;;
 ;;; Code:
 
@@ -73,6 +73,7 @@
     :action (helm-mpd-current-playlist-actions conn)
     :migemo t))
 
+;;;###autoload
 (defun helm-mpd-current-playlist (host port)
   "Helm for current MPD playlist."
   (interactive (helm-mpd-read-host-and-port))
@@ -106,6 +107,7 @@
     :candidates (helm-mpd-library-candidates conn)
     :action (helm-mpd-library-actions conn)))
 
+;;;###autoload
 (defun helm-mpd-library (host port)
   "Helm for MPD library."
   (interactive (helm-mpd-read-host-and-port))
@@ -147,6 +149,7 @@
   (helm-build-dummy-source "Create playlist"
     :action (helm-mpd-new-playlist-actions conn)))
 
+;;;###autoload
 (defun helm-mpd-playlist (host port)
   (interactive (helm-mpd-read-host-and-port))
   (helm-mpd-with-conn (conn helm-mpd-host helm-mpd-port)
@@ -158,6 +161,7 @@
 ;; Put together
 ;; ----------------------------------------------------------------
 
+;;;###autoload
 (defun helm-mpd (host port)
   "Helm for MPD."
   (interactive (helm-mpd-read-host-and-port))
