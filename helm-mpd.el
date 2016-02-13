@@ -4,11 +4,10 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-02-14 00:20:36 tuemura>
+;; Time-stamp: <2016-02-14 00:30:36 tuemura>
 ;;
 ;;; Code:
 
-(require 'cl)
 (require 'helm)
 (require 'libmpdee)
 
@@ -101,6 +100,18 @@
   (helm-mpd-with-conn (conn host port)
                       (helm :sources (helm-mpd-build-library-source conn)
                             :buffer "*helm-mpd-library*")))
+
+;; ----------------------------------------------------------------
+;; Put together
+;; ----------------------------------------------------------------
+
+(defun helm-mpd (host port)
+  "Helm for MPD."
+  (interactive (helm-mpd-read-host-and-port))
+  (helm-mpd-with-conn (conn host port)
+                      (helm :sources (list (helm-mpd-build-current-playlist-source conn)
+                                           (helm-mpd-build-library-source conn))
+                            :buffer "*helm-mpd*")))
 
 (provide 'helm-mpd)
 
