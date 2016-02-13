@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-02-14 02:07:14 tuemura>
+;; Time-stamp: <2016-02-14 02:09:24 tuemura>
 ;;
 ;;; Code:
 
@@ -70,7 +70,8 @@
 (defun helm-mpd-build-current-playlist-source (conn)
   (helm-build-sync-source "Current playlist"
     :candidates (helm-mpd-current-playlist-candidates conn)
-    :action (helm-mpd-current-playlist-actions conn)))
+    :action (helm-mpd-current-playlist-actions conn)
+    :migemo t))
 
 (defun helm-mpd-current-playlist (host port)
   "Helm for current MPD playlist."
