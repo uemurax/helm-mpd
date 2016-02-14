@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-02-14 17:43:34 tuemura>
+;; Time-stamp: <2016-02-15 06:13:31 tuemura>
 ;;
 ;;; Code:
 
@@ -60,6 +60,38 @@
     m))
 
 ;; ----------------------------------------------------------------
+;; (Optional) Tag editor
+;; 
+;; Available when `emacs-id3.el' <https://github.com/uemurax/emacs-id3> is installed.
+;; ----------------------------------------------------------------
+
+(defun helm-mpd-has-tag-editor-p ()
+  "Return t if Emacs has an id3 tag editor."
+  (and (locate-library "emacs-id3")
+       (executable-find "mid3v2")
+       t))
+
+(defcustom helm-mpd-tag-edit-buffer-name "*helm-mpd-tag-edit*"
+  "Tag editor buffer name."
+  :group 'helm-mpd
+  :type 'string)
+
+(defcustom helm-mpd-library-directory (expand-file-name "~/Music")
+  "Local MPD library directory."
+  :group 'helm-mpd
+  :type 'string)
+
+(defun helm-mpd-spawn-tag-editor (&rest songs)
+  (switch-to-buffer helm-mpd-tag-edit-buffer-name)
+  (erase-buffer)
+  (mapc (lambda (song)
+          (id3-read-with-mid3v2 (expand-file-name song helm-mpd-library-directory)
+                                t))
+        songs)
+  (id3-edit-mode)
+  (goto-char (point-min)))
+
+;; ----------------------------------------------------------------
 ;; Current playlist
 ;; ----------------------------------------------------------------
 
@@ -102,17 +134,35 @@
     (with-helm-alive-p
       (helm-exit-and-execute-action (helm-mpd-swap-songs conn)))))
 
+(defun helm-mpd-edit-songs (conn)
+  (lambda (_ignore)
+    (apply #'helm-mpd-spawn-tag-editor
+           (mapcar (lambda (song)
+                     (getf song 'file))
+                   (helm-marked-candidates)))))
+
+(defun helm-mpd-run-edit-songs (conn)
+  (lambda ()
+    (interactive)
+    (with-helm-alive-p
+      (helm-exit-and-execute-action (helm-mpd-edit-songs conn)))))
+
 (defun helm-mpd-current-playlist-actions (conn)
   (helm-make-actions
    "Play song" (helm-mpd-play-song conn)
    "Delete song(s)" (helm-mpd-delete-songs conn)
-   "Swap song(s)" (helm-mpd-swap-songs conn)))
+   "Swap song(s)" (helm-mpd-swap-songs conn)
+   (when (helm-mpd-has-tag-editor-p)
+     "Edit song(s)")
+   (helm-mpd-edit-songs conn)))
 
 (defun helm-mpd-current-playlist-map (conn)
   (let ((m (make-sparse-keymap)))
     (set-keymap-parent m (helm-mpd-map conn))
     (dolist (v `(("M-D" . ,(helm-mpd-run-delete-songs conn))
-                 ("M-S" . ,(helm-mpd-run-swap-songs conn))))
+                 ("M-S" . ,(helm-mpd-run-swap-songs conn))
+                 ,@(when (helm-mpd-has-tag-editor-p)
+                     (list (cons "M-E" (helm-mpd-run-edit-songs conn))))))
       (define-key m (kbd (car v)) (cdr v)))
     m))
 
