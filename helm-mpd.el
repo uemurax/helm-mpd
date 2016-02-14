@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-02-14 17:05:13 tuemura>
+;; Time-stamp: <2016-02-14 17:25:29 tuemura>
 ;;
 ;;; Code:
 
@@ -100,9 +100,10 @@
 
 (defun helm-mpd-current-playlist-candidates (conn)
   "Get current playlist."
-  (mapcar (lambda (song)
-            (cons (getf song 'Title) song))
-          (mpd-get-playlist-entry conn)))
+  (lambda ()
+    (mapcar (lambda (song)
+              (cons (getf song 'Title) song))
+            (mpd-get-playlist-entry conn))))
 
 (defun helm-mpd-build-current-playlist-source (conn)
   (helm-build-sync-source "Current playlist"
@@ -125,14 +126,15 @@
 
 (defun helm-mpd-library-candidates (conn)
   "Get all files and directories in the MPD database."
-  (let ((ls nil))
-    (mpd-list-directory-recursive conn (lambda (obj directoryp)
-                                         (push (cons obj (cons (if directoryp
-                                                                   'directory
-                                                                 'file)
-                                                               obj))
-                                               ls)))
-    ls))
+  (lambda ()
+    (let ((ls nil))
+      (mpd-list-directory-recursive conn (lambda (obj directoryp)
+                                           (push (cons obj (cons (if directoryp
+                                                                     'directory
+                                                                   'file)
+                                                                 obj))
+                                                 ls)))
+      ls)))
 
 (defun helm-mpd-library-actions (conn)
   (helm-make-actions
@@ -159,12 +161,13 @@
 
 (defun helm-mpd-playlist-candidates (conn)
   "Get all playlists."
-  (let ((ls nil))
-    (mpd-get-directory-info conn nil
-                            (lambda (obj type)
-                              (when (eq type 'playlist)
-                                (push obj ls))))
-    ls))
+  (lambda ()
+    (let ((ls nil))
+      (mpd-get-directory-info conn nil
+                              (lambda (obj type)
+                                (when (eq type 'playlist)
+                                  (push obj ls))))
+      ls)))
 
 (defun helm-mpd-load-playlists (conn)
   (lambda (_ignore)
