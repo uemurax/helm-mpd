@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-02-15 06:27:07 tuemura>
+;; Time-stamp: <2016-02-15 06:41:42 tuemura>
 ;;
 ;;; Code:
 
@@ -84,10 +84,9 @@
 (defun helm-mpd-spawn-tag-editor (&rest songs)
   (switch-to-buffer helm-mpd-tag-edit-buffer-name)
   (erase-buffer)
-  (mapc (lambda (song)
-          (id3-read-with-mid3v2 (expand-file-name song helm-mpd-library-directory)
-                                t))
-        songs)
+  (apply #'id3-read-with-mid3v2 t
+         (mapcar (lambda (song) (expand-file-name song helm-mpd-library-directory))
+                 songs))
   (id3-edit-mode)
   (goto-char (point-min)))
 
