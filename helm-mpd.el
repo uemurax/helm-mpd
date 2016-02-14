@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-02-14 17:25:29 tuemura>
+;; Time-stamp: <2016-02-14 17:43:34 tuemura>
 ;;
 ;;; Code:
 
@@ -40,6 +40,24 @@
                          nil nil helm-mpd-host)
             (read-number "Port: " helm-mpd-port))
     (list helm-mpd-host helm-mpd-port)))
+
+;; ----------------------------------------------------------------
+;; Common
+;; ----------------------------------------------------------------
+
+(defun helm-mpd-refresh (conn)
+  (lambda ()
+    (interactive)
+    (with-helm-alive-p
+      (mpd-update conn)
+      (helm-force-update))))
+
+(defun helm-mpd-map (conn)
+  (let ((m (make-sparse-keymap)))
+    (set-keymap-parent m helm-map)
+    (dolist (v `(("C-c u" . ,(helm-mpd-refresh conn))))
+      (define-key m (kbd (car v)) (cdr v)))
+    m))
 
 ;; ----------------------------------------------------------------
 ;; Current playlist
@@ -92,7 +110,7 @@
 
 (defun helm-mpd-current-playlist-map (conn)
   (let ((m (make-sparse-keymap)))
-    (set-keymap-parent m helm-map)
+    (set-keymap-parent m (helm-mpd-map conn))
     (dolist (v `(("M-D" . ,(helm-mpd-run-delete-songs conn))
                  ("M-S" . ,(helm-mpd-run-swap-songs conn))))
       (define-key m (kbd (car v)) (cdr v)))
@@ -145,7 +163,8 @@
 (defun helm-mpd-build-library-source (conn)
   (helm-build-sync-source "Library"
     :candidates (helm-mpd-library-candidates conn)
-    :action (helm-mpd-library-actions conn)))
+    :action (helm-mpd-library-actions conn)
+    :keymap (helm-mpd-map conn)))
 
 ;;;###autoload
 (defun helm-mpd-library (host port)
@@ -200,7 +219,7 @@
 
 (defun helm-mpd-playlist-map (conn)
   (let ((m (make-sparse-keymap)))
-    (set-keymap-parent m helm-map)
+    (set-keymap-parent m (helm-mpd-map conn))
     (dolist (v `(("M-D" . ,(helm-mpd-run-remove-playlists conn))))
       (define-key m (kbd (car v)) (cdr v)))
     m))
@@ -213,7 +232,8 @@
 
 (defun helm-mpd-build-new-playlist-source (conn)
   (helm-build-dummy-source "Create playlist"
-    :action (helm-mpd-new-playlist-actions conn)))
+    :action (helm-mpd-new-playlist-actions conn)
+    :keymap (helm-mpd-map conn)))
 
 ;;;###autoload
 (defun helm-mpd-playlist (host port)
