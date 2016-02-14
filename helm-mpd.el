@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-02-14 02:11:50 tuemura>
+;; Time-stamp: <2016-02-14 17:05:13 tuemura>
 ;;
 ;;; Code:
 
@@ -29,7 +29,9 @@
   "Evaluate BODY with an MPD connection named VAR."
   `(let ((,var (mpd-conn-new ,host ,port ,@args)))
      (unwind-protect
-         (progn ,@body)
+         (progn
+           (setq *helm-mpd-conn* ,var)
+           ,@body)
        (mpd-close-connection ,var))))
 
 (defun helm-mpd-read-host-and-port ()
@@ -43,23 +45,58 @@
 ;; Current playlist
 ;; ----------------------------------------------------------------
 
+(defun helm-mpd-play-song (conn)
+  (lambda (song)
+    (mpd-play conn (getf song 'Id) t)))
+
+(defun helm-mpd-delete-songs (conn)
+  (lambda (_ignore)
+    (dolist (song (helm-marked-candidates))
+      (mpd-delete conn (getf song 'Id) t)
+      (message "Delete %s from the current playlist" (getf song 'Title)))))
+
+(defun helm-mpd-run-delete-songs (conn)
+  "Run `helm-mpd-delete-songs' action from `helm-mpd-build-current-playlist-source'."
+  (lambda ()
+    (interactive)
+    (with-helm-alive-p
+      (helm-exit-and-execute-action (helm-mpd-delete-songs conn)))))
+
+(defun helm-mpd-swap-songs (conn)
+  (lambda (first)
+    (let ((cs (helm-marked-candidates))
+          (second nil))
+      (cond ((= (length cs) 2)
+             (setq first (car cs)
+                   second (cadr cs)))
+            ((and (= (length cs) 1) (not (eq first (car cs))))
+             (setq second (car cs))))
+      (if second
+          (progn
+            (mpd-swap conn (list (getf first 'Id)) (list (getf second 'Id)) t)
+            (message "Swap %s and %s" (getf first 'Title) (getf second 'Title)))
+        (message "That action can be performed only with two candidates.")))))
+
+(defun helm-mpd-run-swap-songs (conn)
+  "Run `helm-mpd-swap-songs' action from `helm-mpd-build-current-playlist-source'."
+  (lambda ()
+    (interactive)
+    (with-helm-alive-p
+      (helm-exit-and-execute-action (helm-mpd-swap-songs conn)))))
+
 (defun helm-mpd-current-playlist-actions (conn)
   (helm-make-actions
-   "Play song" (lambda (song) (mpd-play conn (getf song 'Id) t))
-   "Delete song(s)" (lambda (_ignore)
-                      (dolist (song (helm-marked-candidates))
-                        (mpd-delete conn (getf song 'Id) t)))
-   "Swap song(s)" (lambda (first)
-                    (let ((cs (helm-marked-candidates))
-                          (second nil))
-                      (cond ((= (length cs) 2)
-                             (setq first (car cs)
-                                   second (cadr cs)))
-                            ((and (= (length cs) 1) (not (eq first (car cs))))
-                             (setq second (car cs))))
-                      (if second
-                          (mpd-swap conn (list (getf first 'Id)) (list (getf second 'Id)) t)
-                        (message "That action can be performed only with two candidates."))))))
+   "Play song" (helm-mpd-play-song conn)
+   "Delete song(s)" (helm-mpd-delete-songs conn)
+   "Swap song(s)" (helm-mpd-swap-songs conn)))
+
+(defun helm-mpd-current-playlist-map (conn)
+  (let ((m (make-sparse-keymap)))
+    (set-keymap-parent m helm-map)
+    (dolist (v `(("M-D" . ,(helm-mpd-run-delete-songs conn))
+                 ("M-S" . ,(helm-mpd-run-swap-songs conn))))
+      (define-key m (kbd (car v)) (cdr v)))
+    m))
 
 (defun helm-mpd-current-playlist-candidates (conn)
   "Get current playlist."
@@ -71,6 +108,7 @@
   (helm-build-sync-source "Current playlist"
     :candidates (helm-mpd-current-playlist-candidates conn)
     :action (helm-mpd-current-playlist-actions conn)
+    :keymap (helm-mpd-current-playlist-map conn)
     :migemo t))
 
 ;;;###autoload
@@ -128,22 +166,47 @@
                                 (push obj ls))))
     ls))
 
+(defun helm-mpd-load-playlists (conn)
+  (lambda (_ignore)
+    (let ((playlists (helm-marked-candidates)))
+      (mpd-load-playlist conn playlists)
+      (message "Load playlists %s" playlists))))
+
+(defun helm-mpd-remove-playlists (conn)
+  (lambda (_ignore)
+    (let ((playlists (helm-marked-candidates)))
+      (mpd-remove-playlist conn playlists)
+      (message "Remove playlists %s" playlists))))
+
+(defun helm-mpd-run-remove-playlists (conn)
+  (lambda ()
+    (interactive)
+    (with-helm-alive-p
+      (helm-exit-and-execute-action (helm-mpd-remove-playlists conn)))))
+
 (defun helm-mpd-new-playlist-actions (conn)
   (helm-make-actions
    "Save current playlist to file" (lambda (pname)
-                                     (mpd-save-playlist conn pname))))
+                                     (mpd-save-playlist conn pname)
+                                     (message "Save the current playlist as %s" pname))))
 
 (defun helm-mpd-playlist-actions (conn)
   (helm-make-actions
-   "Load playlist(s)" (lambda (_ignore)
-                        (mpd-load-playlist conn (helm-marked-candidates)))
-   "Remove playlist(s)" (lambda (_ignore)
-                          (mpd-remove-playlist conn (helm-marked-candidates)))))
+   "Load playlist(s)" (helm-mpd-load-playlists conn)
+   "Remove playlist(s)" (helm-mpd-remove-playlists conn)))
+
+(defun helm-mpd-playlist-map (conn)
+  (let ((m (make-sparse-keymap)))
+    (set-keymap-parent m helm-map)
+    (dolist (v `(("M-D" . ,(helm-mpd-run-remove-playlists conn))))
+      (define-key m (kbd (car v)) (cdr v)))
+    m))
 
 (defun helm-mpd-build-playlist-source (conn)
   (helm-build-sync-source "Playlists"
     :candidates (helm-mpd-playlist-candidates conn)
-    :action (helm-mpd-playlist-actions conn)))
+    :action (helm-mpd-playlist-actions conn)
+    :keymap (helm-mpd-playlist-map conn)))
 
 (defun helm-mpd-build-new-playlist-source (conn)
   (helm-build-dummy-source "Create playlist"
