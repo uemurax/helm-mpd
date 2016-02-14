@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-02-15 06:13:31 tuemura>
+;; Time-stamp: <2016-02-15 06:27:07 tuemura>
 ;;
 ;;; Code:
 
@@ -204,17 +204,44 @@
                                                  ls)))
       ls)))
 
+(defun helm-mpd-edit-files (conn)
+  (lambda (_ignore)
+    (apply #'helm-mpd-spawn-tag-editor
+           (mapcan (lambda (file-or-directory)
+                     (case (car file-or-directory)
+                       ((file) (list (cdr file-or-directory)))
+                       ((directory) (mapcar (lambda (song)
+                                              (getf song 'file))
+                                            (mpd-get-directory-songs conn (cdr file-or-directory))))))
+                   (helm-marked-candidates)))))
+
+(defun helm-mpd-run-edit-files (conn)
+  (lambda ()
+    (interactive)
+    (with-helm-alive-p
+      (helm-exit-and-execute-action (helm-mpd-edit-files conn)))))
+
 (defun helm-mpd-library-actions (conn)
   (helm-make-actions
    "Enqueue song(s)" (lambda (_ignore)
                        (dolist (obj (helm-marked-candidates))
-                         (mpd-enqueue conn (cdr obj))))))
+                         (mpd-enqueue conn (cdr obj))))
+   (when (helm-mpd-has-tag-editor-p)
+     "Edit song(s)")
+   (helm-mpd-edit-files conn)))
+
+(defun helm-mpd-library-map (conn)
+  (let ((m (make-sparse-keymap)))
+    (set-keymap-parent m (helm-mpd-map conn))
+    (dolist (v `(("M-E" . ,(helm-mpd-run-edit-files conn))))
+      (define-key m (kbd (car v)) (cdr v)))
+    m))
 
 (defun helm-mpd-build-library-source (conn)
   (helm-build-sync-source "Library"
     :candidates (helm-mpd-library-candidates conn)
     :action (helm-mpd-library-actions conn)
-    :keymap (helm-mpd-map conn)))
+    :keymap (helm-mpd-library-map conn)))
 
 ;;;###autoload
 (defun helm-mpd-library (host port)
