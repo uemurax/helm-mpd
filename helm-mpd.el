@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-02-15 06:41:42 tuemura>
+;; Time-stamp: <2016-02-15 19:57:33 tuemura>
 ;;
 ;;; Code:
 
@@ -91,6 +91,21 @@
   (goto-char (point-min)))
 
 ;; ----------------------------------------------------------------
+;; Lyrics
+;; ----------------------------------------------------------------
+
+(defcustom helm-mpd-lyrics-directory
+  (expand-file-name "~/.lyrics")
+  "Lyrics directory."
+  :group 'helm-mpd
+  :type 'string)
+
+(defun helm-mpd-format-lyrics (song)
+  (format "%s - %s.txt"
+          (getf song 'Artist)
+          (getf song 'Title)))
+
+;; ----------------------------------------------------------------
 ;; Current playlist
 ;; ----------------------------------------------------------------
 
@@ -146,6 +161,16 @@
     (with-helm-alive-p
       (helm-exit-and-execute-action (helm-mpd-edit-songs conn)))))
 
+(defun helm-mpd-edit-lyrics (song)
+  (find-file (expand-file-name (helm-mpd-format-lyrics song)
+                               helm-mpd-lyrics-directory)))
+
+(defun helm-mpd-run-edit-lyrics ()
+  (interactive)
+  (with-helm-alive-p
+    (helm-exit-and-execute-action 'helm-mpd-edit-lyrics)))
+(put 'helm-mpd-run-edit-lyrics 'helm-only t)
+
 (defun helm-mpd-current-playlist-actions (conn)
   (helm-make-actions
    "Play song" (helm-mpd-play-song conn)
@@ -153,7 +178,8 @@
    "Swap song(s)" (helm-mpd-swap-songs conn)
    (when (helm-mpd-has-tag-editor-p)
      "Edit song(s)")
-   (helm-mpd-edit-songs conn)))
+   (helm-mpd-edit-songs conn)
+   "Edit lyrics" 'helm-mpd-edit-lyrics))
 
 (defun helm-mpd-current-playlist-map (conn)
   (let ((m (make-sparse-keymap)))
@@ -161,7 +187,8 @@
     (dolist (v `(("M-D" . ,(helm-mpd-run-delete-songs conn))
                  ("M-S" . ,(helm-mpd-run-swap-songs conn))
                  ,@(when (helm-mpd-has-tag-editor-p)
-                     (list (cons "M-E" (helm-mpd-run-edit-songs conn))))))
+                     (list (cons "M-E" (helm-mpd-run-edit-songs conn))))
+                 ("M-L" . helm-mpd-run-edit-lyrics)))
       (define-key m (kbd (car v)) (cdr v)))
     m))
 
