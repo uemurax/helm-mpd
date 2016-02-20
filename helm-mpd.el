@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-02-20 19:48:59 tuemura>
+;; Time-stamp: <2016-02-20 19:52:45 tuemura>
 ;;
 ;;; Code:
 
@@ -338,6 +338,11 @@
                                   (push obj ls))))
       ls)))
 
+(defclosure helm-mpd-save-playlist (conn)
+  (lambda (pname)
+    (mpd-save-playlist conn pname)
+    (message "Save the current playlist as %s" pname)))
+
 (defclosure helm-mpd-load-playlists (conn)
   (lambda (_ignore)
     (let ((playlists (helm-marked-candidates)))
@@ -367,9 +372,7 @@
 
 (defun helm-mpd-new-playlist-actions (conn)
   (helm-make-actions
-   "Save current playlist to file" (lambda (pname)
-                                     (mpd-save-playlist conn pname)
-                                     (message "Save the current playlist as %s" pname))))
+   "Save current playlist to file" (helm-mpd-save-playlist conn)))
 
 (defun helm-mpd-playlist-actions (conn)
   (helm-make-actions
