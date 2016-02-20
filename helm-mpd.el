@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-02-20 19:52:45 tuemura>
+;; Time-stamp: <2016-02-20 19:57:19 tuemura>
 ;;
 ;;; Code:
 
@@ -281,31 +281,18 @@
                            (getf song 'file))
                          (helm-marked-candidates)))))
 
-(defclosure helm-mpd-edit-files (conn)
-  (lambda (_ignore)
-    (apply #'helm-mpd-spawn-tag-editor
-           (mapcar (lambda (song)
-                     (getf song 'file))
-                   (helm-marked-candidates)))))
-
-(defclosure helm-mpd-run-edit-files (conn)
-  (lambda ()
-    (interactive)
-    (with-helm-alive-p
-      (helm-exit-and-execute-action (helm-mpd-edit-files conn)))))
-
 (defun helm-mpd-library-actions (conn)
   (helm-make-actions
    "Enqueue song(s)" (helm-mpd-enqueue-files conn)
    (when (helm-mpd-has-tag-editor-p)
      "Edit song(s)")
-   (helm-mpd-edit-files conn)
+   (helm-mpd-edit-songs conn)
    "Edit lyrics" 'helm-mpd-edit-lyrics))
 
 (defun helm-mpd-library-map (conn)
   (let ((m (make-sparse-keymap)))
     (set-keymap-parent m (helm-mpd-map conn))
-    (dolist (v `(("M-E" . ,(helm-mpd-run-edit-files conn))
+    (dolist (v `(("M-E" . ,(helm-mpd-run-edit-songs conn))
                  ("M-L" . helm-mpd-run-edit-lyrics)))
       (define-key m (kbd (car v)) (cdr v)))
     m))
