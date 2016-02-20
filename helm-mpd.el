@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-02-15 19:57:33 tuemura>
+;; Time-stamp: <2016-02-20 18:01:02 tuemura>
 ;;
 ;;; Code:
 
@@ -126,6 +126,15 @@
     (with-helm-alive-p
       (helm-exit-and-execute-action (helm-mpd-delete-songs conn)))))
 
+(defun helm-mpd-run-delete-songs-persistent (conn)
+  (lambda ()
+    (interactive)
+    (with-helm-alive-p
+      (helm-attrset 'delete-action (cons (helm-mpd-delete-songs conn) 'never-split))
+      (helm-execute-persistent-action 'delete-action)
+      (message nil)
+      (helm-force-update))))
+
 (defun helm-mpd-swap-songs (conn)
   (lambda (first)
     (let ((cs (helm-marked-candidates))
@@ -185,6 +194,7 @@
   (let ((m (make-sparse-keymap)))
     (set-keymap-parent m (helm-mpd-map conn))
     (dolist (v `(("M-D" . ,(helm-mpd-run-delete-songs conn))
+                 ("C-c d" . ,(helm-mpd-run-delete-songs-persistent conn))
                  ("M-S" . ,(helm-mpd-run-swap-songs conn))
                  ,@(when (helm-mpd-has-tag-editor-p)
                      (list (cons "M-E" (helm-mpd-run-edit-songs conn))))
@@ -309,6 +319,15 @@
     (with-helm-alive-p
       (helm-exit-and-execute-action (helm-mpd-remove-playlists conn)))))
 
+(defun helm-mpd-run-remove-playlists-persistent (conn)
+  (lambda ()
+    (interactive)
+    (with-helm-alive-p
+      (helm-attrset 'delete-action (cons (helm-mpd-remove-playlists conn) 'never-split))
+      (helm-execute-persistent-action 'delete-action)
+      (message nil)
+      (helm-force-update))))
+
 (defun helm-mpd-new-playlist-actions (conn)
   (helm-make-actions
    "Save current playlist to file" (lambda (pname)
@@ -323,7 +342,8 @@
 (defun helm-mpd-playlist-map (conn)
   (let ((m (make-sparse-keymap)))
     (set-keymap-parent m (helm-mpd-map conn))
-    (dolist (v `(("M-D" . ,(helm-mpd-run-remove-playlists conn))))
+    (dolist (v `(("M-D" . ,(helm-mpd-run-remove-playlists conn))
+                 ("C-c d" . ,(helm-mpd-run-remove-playlists-persistent conn))))
       (define-key m (kbd (car v)) (cdr v)))
     m))
 
