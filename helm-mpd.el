@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-02-20 19:42:19 tuemura>
+;; Time-stamp: <2016-02-20 19:48:59 tuemura>
 ;;
 ;;; Code:
 
@@ -299,12 +299,14 @@
    "Enqueue song(s)" (helm-mpd-enqueue-files conn)
    (when (helm-mpd-has-tag-editor-p)
      "Edit song(s)")
-   (helm-mpd-edit-files conn)))
+   (helm-mpd-edit-files conn)
+   "Edit lyrics" 'helm-mpd-edit-lyrics))
 
 (defun helm-mpd-library-map (conn)
   (let ((m (make-sparse-keymap)))
     (set-keymap-parent m (helm-mpd-map conn))
-    (dolist (v `(("M-E" . ,(helm-mpd-run-edit-files conn))))
+    (dolist (v `(("M-E" . ,(helm-mpd-run-edit-files conn))
+                 ("M-L" . helm-mpd-run-edit-lyrics)))
       (define-key m (kbd (car v)) (cdr v)))
     m))
 
