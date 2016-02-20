@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-02-20 18:01:02 tuemura>
+;; Time-stamp: <2016-02-20 18:45:41 tuemura>
 ;;
 ;;; Code:
 
@@ -157,6 +157,28 @@
     (with-helm-alive-p
       (helm-exit-and-execute-action (helm-mpd-swap-songs conn)))))
 
+(defun helm-mpd-move (conn n)
+  (lambda (song)
+    (let ((pos (getf song 'Pos)))
+      (if pos
+          (mpd-move conn (list pos) (list (+ pos n)))
+        (message "Invalid song.")))))
+
+(defun helm-mpd-run-move-down-persistent (conn)
+  (lambda (n)
+    (interactive "p")
+    (with-helm-alive-p
+      (helm-attrset 'move-down-action (cons (helm-mpd-move conn n) 'never-split))
+      (helm-execute-persistent-action 'move-down-action)
+      (message nil)
+      (helm-force-update))))
+
+(defun helm-mpd-run-move-up-persistent (conn)
+  (lambda (n)
+    (interactive "p")
+    (let ((n (- n)))
+      (funcall (helm-mpd-run-move-down-persistent conn) n))))
+
 (defun helm-mpd-edit-songs (conn)
   (lambda (_ignore)
     (apply #'helm-mpd-spawn-tag-editor
@@ -185,6 +207,8 @@
    "Play song" (helm-mpd-play-song conn)
    "Delete song(s)" (helm-mpd-delete-songs conn)
    "Swap song(s)" (helm-mpd-swap-songs conn)
+   "Move song up" (helm-mpd-move conn -1)
+   "Move song down" (helm-mpd-move conn 1)
    (when (helm-mpd-has-tag-editor-p)
      "Edit song(s)")
    (helm-mpd-edit-songs conn)
@@ -196,6 +220,8 @@
     (dolist (v `(("M-D" . ,(helm-mpd-run-delete-songs conn))
                  ("C-c d" . ,(helm-mpd-run-delete-songs-persistent conn))
                  ("M-S" . ,(helm-mpd-run-swap-songs conn))
+                 ("C-c C-n" . ,(helm-mpd-run-move-down-persistent conn))
+                 ("C-c C-p" . ,(helm-mpd-run-move-up-persistent conn))
                  ,@(when (helm-mpd-has-tag-editor-p)
                      (list (cons "M-E" (helm-mpd-run-edit-songs conn))))
                  ("M-L" . helm-mpd-run-edit-lyrics)))
