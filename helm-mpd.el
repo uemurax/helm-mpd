@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-02-20 19:15:45 tuemura>
+;; Time-stamp: <2016-02-20 19:42:19 tuemura>
 ;;
 ;;; Code:
 
@@ -270,24 +270,22 @@
 (defclosure helm-mpd-library-candidates (conn)
   "Get all files and directories in the MPD database."
   (lambda ()
-    (let ((ls nil))
-      (mpd-list-directory-recursive conn (lambda (obj directoryp)
-                                           (push (cons obj (cons (if directoryp
-                                                                     'directory
-                                                                   'file)
-                                                                 obj))
-                                                 ls)))
-      ls)))
+    (mapcar (lambda (song)
+              (cons (getf song 'file) song))
+            (mpd-get-directory-songs conn))))
+
+(defclosure helm-mpd-enqueue-files (conn)
+  (lambda (_ignore)
+    (mpd-enqueue conn
+                 (mapcar (lambda (song)
+                           (getf song 'file))
+                         (helm-marked-candidates)))))
 
 (defclosure helm-mpd-edit-files (conn)
   (lambda (_ignore)
     (apply #'helm-mpd-spawn-tag-editor
-           (mapcan (lambda (file-or-directory)
-                     (case (car file-or-directory)
-                       ((file) (list (cdr file-or-directory)))
-                       ((directory) (mapcar (lambda (song)
-                                              (getf song 'file))
-                                            (mpd-get-directory-songs conn (cdr file-or-directory))))))
+           (mapcar (lambda (song)
+                     (getf song 'file))
                    (helm-marked-candidates)))))
 
 (defclosure helm-mpd-run-edit-files (conn)
@@ -298,9 +296,7 @@
 
 (defun helm-mpd-library-actions (conn)
   (helm-make-actions
-   "Enqueue song(s)" (lambda (_ignore)
-                       (dolist (obj (helm-marked-candidates))
-                         (mpd-enqueue conn (cdr obj))))
+   "Enqueue song(s)" (helm-mpd-enqueue-files conn)
    (when (helm-mpd-has-tag-editor-p)
      "Edit song(s)")
    (helm-mpd-edit-files conn)))
