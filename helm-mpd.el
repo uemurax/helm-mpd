@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-02-20 18:45:41 tuemura>
+;; Time-stamp: <2016-02-20 19:15:45 tuemura>
 ;;
 ;;; Code:
 
@@ -41,11 +41,25 @@
             (read-number "Port: " helm-mpd-port))
     (list helm-mpd-host helm-mpd-port)))
 
+(defmacro defclosure (name vars &optional docstring &rest body)
+  "Define a closure."
+  (declare (indent defun)
+           (doc-string 3))
+  (let ((let-vars (mapcar (lambda (x) (list x x)) vars))
+        (doc nil))
+    (if (stringp docstring)
+        (setq doc (list docstring))
+      (setq body (cons docstring body)))
+    `(defun ,name ,vars
+       ,@doc
+       (lexical-let ,let-vars
+         ,@body))))
+
 ;; ----------------------------------------------------------------
 ;; Common
 ;; ----------------------------------------------------------------
 
-(defun helm-mpd-refresh (conn)
+(defclosure helm-mpd-refresh (conn)
   (lambda ()
     (interactive)
     (with-helm-alive-p
@@ -109,24 +123,24 @@
 ;; Current playlist
 ;; ----------------------------------------------------------------
 
-(defun helm-mpd-play-song (conn)
+(defclosure helm-mpd-play-song (conn)
   (lambda (song)
     (mpd-play conn (getf song 'Id) t)))
 
-(defun helm-mpd-delete-songs (conn)
+(defclosure helm-mpd-delete-songs (conn)
   (lambda (_ignore)
     (dolist (song (helm-marked-candidates))
       (mpd-delete conn (getf song 'Id) t)
       (message "Delete %s from the current playlist" (getf song 'Title)))))
 
-(defun helm-mpd-run-delete-songs (conn)
+(defclosure helm-mpd-run-delete-songs (conn)
   "Run `helm-mpd-delete-songs' action from `helm-mpd-build-current-playlist-source'."
   (lambda ()
     (interactive)
     (with-helm-alive-p
       (helm-exit-and-execute-action (helm-mpd-delete-songs conn)))))
 
-(defun helm-mpd-run-delete-songs-persistent (conn)
+(defclosure helm-mpd-run-delete-songs-persistent (conn)
   (lambda ()
     (interactive)
     (with-helm-alive-p
@@ -135,7 +149,7 @@
       (message nil)
       (helm-force-update))))
 
-(defun helm-mpd-swap-songs (conn)
+(defclosure helm-mpd-swap-songs (conn)
   (lambda (first)
     (let ((cs (helm-marked-candidates))
           (second nil))
@@ -150,21 +164,21 @@
             (message "Swap %s and %s" (getf first 'Title) (getf second 'Title)))
         (message "That action can be performed only with two candidates.")))))
 
-(defun helm-mpd-run-swap-songs (conn)
+(defclosure helm-mpd-run-swap-songs (conn)
   "Run `helm-mpd-swap-songs' action from `helm-mpd-build-current-playlist-source'."
   (lambda ()
     (interactive)
     (with-helm-alive-p
       (helm-exit-and-execute-action (helm-mpd-swap-songs conn)))))
 
-(defun helm-mpd-move (conn n)
+(defclosure helm-mpd-move (conn n)
   (lambda (song)
     (let ((pos (getf song 'Pos)))
       (if pos
           (mpd-move conn (list pos) (list (+ pos n)))
         (message "Invalid song.")))))
 
-(defun helm-mpd-run-move-down-persistent (conn)
+(defclosure helm-mpd-run-move-down-persistent (conn)
   (lambda (n)
     (interactive "p")
     (with-helm-alive-p
@@ -173,20 +187,19 @@
       (message nil)
       (helm-force-update))))
 
-(defun helm-mpd-run-move-up-persistent (conn)
+(defclosure helm-mpd-run-move-up-persistent (conn)
   (lambda (n)
     (interactive "p")
-    (let ((n (- n)))
-      (funcall (helm-mpd-run-move-down-persistent conn) n))))
+    (funcall (helm-mpd-run-move-down-persistent conn) (- n))))
 
-(defun helm-mpd-edit-songs (conn)
+(defclosure helm-mpd-edit-songs (conn)
   (lambda (_ignore)
     (apply #'helm-mpd-spawn-tag-editor
            (mapcar (lambda (song)
                      (getf song 'file))
                    (helm-marked-candidates)))))
 
-(defun helm-mpd-run-edit-songs (conn)
+(defclosure helm-mpd-run-edit-songs (conn)
   (lambda ()
     (interactive)
     (with-helm-alive-p
@@ -228,7 +241,7 @@
       (define-key m (kbd (car v)) (cdr v)))
     m))
 
-(defun helm-mpd-current-playlist-candidates (conn)
+(defclosure helm-mpd-current-playlist-candidates (conn)
   "Get current playlist."
   (lambda ()
     (mapcar (lambda (song)
@@ -254,7 +267,7 @@
 ;; Libraries
 ;; ----------------------------------------------------------------
 
-(defun helm-mpd-library-candidates (conn)
+(defclosure helm-mpd-library-candidates (conn)
   "Get all files and directories in the MPD database."
   (lambda ()
     (let ((ls nil))
@@ -266,7 +279,7 @@
                                                  ls)))
       ls)))
 
-(defun helm-mpd-edit-files (conn)
+(defclosure helm-mpd-edit-files (conn)
   (lambda (_ignore)
     (apply #'helm-mpd-spawn-tag-editor
            (mapcan (lambda (file-or-directory)
@@ -277,7 +290,7 @@
                                             (mpd-get-directory-songs conn (cdr file-or-directory))))))
                    (helm-marked-candidates)))))
 
-(defun helm-mpd-run-edit-files (conn)
+(defclosure helm-mpd-run-edit-files (conn)
   (lambda ()
     (interactive)
     (with-helm-alive-p
@@ -317,7 +330,7 @@
 ;; Play lists
 ;; ----------------------------------------------------------------
 
-(defun helm-mpd-playlist-candidates (conn)
+(defclosure helm-mpd-playlist-candidates (conn)
   "Get all playlists."
   (lambda ()
     (let ((ls nil))
@@ -327,25 +340,25 @@
                                   (push obj ls))))
       ls)))
 
-(defun helm-mpd-load-playlists (conn)
+(defclosure helm-mpd-load-playlists (conn)
   (lambda (_ignore)
     (let ((playlists (helm-marked-candidates)))
       (mpd-load-playlist conn playlists)
       (message "Load playlists %s" playlists))))
 
-(defun helm-mpd-remove-playlists (conn)
+(defclosure helm-mpd-remove-playlists (conn)
   (lambda (_ignore)
     (let ((playlists (helm-marked-candidates)))
       (mpd-remove-playlist conn playlists)
       (message "Remove playlists %s" playlists))))
 
-(defun helm-mpd-run-remove-playlists (conn)
+(defclosure helm-mpd-run-remove-playlists (conn)
   (lambda ()
     (interactive)
     (with-helm-alive-p
       (helm-exit-and-execute-action (helm-mpd-remove-playlists conn)))))
 
-(defun helm-mpd-run-remove-playlists-persistent (conn)
+(defclosure helm-mpd-run-remove-playlists-persistent (conn)
   (lambda ()
     (interactive)
     (with-helm-alive-p
