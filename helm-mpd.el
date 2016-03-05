@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-05 20:58:18 tuemura>
+;; Time-stamp: <2016-03-05 21:09:20 tuemura>
 ;;
 ;;; Code:
 
@@ -277,12 +277,15 @@
                 (cons (getf song 'file) song))
               (get-songs conn)))))
 
+(defun helm-mpd-enqueue (conn songs)
+  (mpd-enqueue conn
+               (mapcar (lambda (song)
+                         (getf song 'file))
+                       songs)))
+
 (defclosure helm-mpd-enqueue-files (conn)
   (lambda (_ignore)
-    (mpd-enqueue conn
-                 (mapcar (lambda (song)
-                           (getf song 'file))
-                         (helm-marked-candidates)))))
+    (helm-mpd-enqueue conn (helm-marked-candidates))))
 
 (defun helm-mpd-song-actions (conn)
   (helm-make-actions
@@ -325,8 +328,14 @@
   (lambda (_ignore)
     (helm-mpd-library conn `(artist . ,(helm-marked-candidates)))))
 
+(defclosure helm-mpd-enqueue-artists (conn)
+  (lambda (_ignore)
+    (helm-mpd-enqueue conn
+                      (mpd-search conn 'artist (helm-marked-candidates)))))
+
 (defun helm-mpd-artist-actions (conn)
   (helm-make-actions
+   "Enqueue artist(s)' songs" (helm-mpd-enqueue-artists conn)
    "Helm for artist(s)" (helm-mpd-helm-for-artists conn)))
 
 (defun helm-mpd-build-artist-source (conn)
@@ -354,12 +363,18 @@
                     nil)))
       (mpd-get-artist-albums conn artist))))
 
+(defclosure helm-mpd-enqueue-albums (conn)
+  (lambda (_ignore)
+    (helm-mpd-enqueue conn
+                      (mpd-search conn 'album (helm-marked-candidates)))))
+
 (defclosure helm-mpd-album-songs (conn)
   (lambda (_ignore)
     (helm-mpd-songs conn `(album . ,(helm-marked-candidates)))))
 
 (defun helm-mpd-album-actions (conn)
   (helm-make-actions
+   "Enqueue album(s)' songs" (helm-mpd-enqueue-albums conn)
    "Helm for album(s)' songs" (helm-mpd-album-songs conn)))
 
 (defun helm-mpd-build-album-source (conn &optional filter)
