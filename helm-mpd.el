@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-05 19:50:22 tuemura>
+;; Time-stamp: <2016-03-05 19:52:25 tuemura>
 ;;
 ;;; Code:
 
@@ -267,16 +267,16 @@
 ;; Libraries
 ;; ----------------------------------------------------------------
 
-(defclosure helm-mpd-library-candidates (conn)
+;;; ----------------------------------------------------------------
+;;; Songs
+;;; ----------------------------------------------------------------
+
+(defclosure helm-mpd-song-candidates (conn)
   "Get all files and directories in the MPD database."
   (lambda ()
     (mapcar (lambda (song)
               (cons (getf song 'file) song))
             (mpd-get-directory-songs conn))))
-
-;;; ----------------------------------------------------------------
-;;; Songs
-;;; ----------------------------------------------------------------
 
 (defclosure helm-mpd-enqueue-files (conn)
   (lambda (_ignore)
@@ -303,7 +303,7 @@
 
 (defun helm-mpd-build-song-source (conn)
   (helm-build-sync-source "Songs"
-    :candidates (helm-mpd-library-candidates conn)
+    :candidates (helm-mpd-song-candidates conn)
     :action (helm-mpd-library-actions conn)
     :keymap (helm-mpd-library-map conn)))
 
