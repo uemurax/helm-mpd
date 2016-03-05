@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-06 01:19:57 tuemura>
+;; Time-stamp: <2016-03-06 01:27:35 tuemura>
 ;;
 ;;; Code:
 
@@ -133,12 +133,12 @@ but does not exit helm session."
   :group 'helm-mpd)
 
 (defface helm-mpd-title-face
-  '((t (:inherit font-lock-type-face)))
+  '((t (:inherit font-lock-function-name-face)))
   "Title face."
   :group 'helm-mpd)
 
 (defface helm-mpd-album-face
-  '((t (:inherit font-lock-constant-face)))
+  '((t (:inherit font-lock-type-face)))
   "Album face."
   :group 'helm-mpd)
 
