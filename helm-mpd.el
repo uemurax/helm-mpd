@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-05 21:14:04 tuemura>
+;; Time-stamp: <2016-03-05 21:22:16 tuemura>
 ;;
 ;;; Code:
 
@@ -306,8 +306,8 @@
 (defun helm-mpd-build-song-source (conn &optional filter)
   (helm-build-sync-source "Songs"
     :candidates (helm-mpd-song-candidates conn filter)
-    :action (helm-mpd-library-actions conn)
-    :keymap (helm-mpd-library-map conn)))
+    :action (helm-mpd-song-actions conn)
+    :keymap (helm-mpd-song-map conn)))
 
 ;;;###autoload
 (defun helm-mpd-songs (conn &optional filter)
@@ -324,25 +324,38 @@
   (lambda ()
     (mpd-get-artists conn)))
 
-(defclosure helm-mpd-helm-for-artists (conn)
-  (lambda (_ignore)
-    (helm-mpd-library conn `(artist . ,(helm-marked-candidates)))))
-
 (defclosure helm-mpd-enqueue-artists (conn)
   (lambda (_ignore)
     (helm-mpd-enqueue conn
                       (mpd-search conn 'artist (helm-marked-candidates)))))
+
+(defclosure helm-mpd-helm-for-artists (conn)
+  (lambda (_ignore)
+    (helm-mpd-library conn `(artist . ,(helm-marked-candidates)))))
+
+(defclosure helm-mpd-run-helm-for-artists (conn)
+  (lambda ()
+    (interactive)
+    (with-helm-alive-p
+      (helm-exit-and-execute-action (helm-mpd-helm-for-artists conn)))))
 
 (defun helm-mpd-artist-actions (conn)
   (helm-make-actions
    "Enqueue artist(s)' songs" (helm-mpd-enqueue-artists conn)
    "Helm for artist(s)" (helm-mpd-helm-for-artists conn)))
 
+(defun helm-mpd-artist-map (conn)
+  (let ((m (make-sparse-keymap)))
+    (set-keymap-parent m (helm-mpd-map conn))
+    (dolist (v `(("M-H" . ,(helm-mpd-run-helm-for-artists conn))))
+      (define-key m (kbd (car v)) (cdr v)))
+    m))
+
 (defun helm-mpd-build-artist-source (conn)
   (helm-build-sync-source "Artists"
     :candidates (helm-mpd-artist-candidates conn)
     :action (helm-mpd-artist-actions conn)
-    :keymap (helm-mpd-map conn)
+    :keymap (helm-mpd-artist-map conn)
     :migemo t))
 
 ;;;###autoload
@@ -372,16 +385,29 @@
   (lambda (_ignore)
     (helm-mpd-library conn `(album . ,(helm-marked-candidates)))))
 
+(defclosure helm-mpd-run-helm-for-albums (conn)
+  (lambda ()
+    (interactive)
+    (with-helm-alive-p
+      (helm-exit-and-execute-action (helm-mpd-helm-for-albums conn)))))
+
 (defun helm-mpd-album-actions (conn)
   (helm-make-actions
    "Enqueue album(s)' songs" (helm-mpd-enqueue-albums conn)
    "Helm for album(s)' songs" (helm-mpd-album-songs conn)))
 
+(defun helm-mpd-album-map (conn)
+  (let ((m (make-sparse-keymap)))
+    (set-keymap-parent m (helm-mpd-map conn))
+    (dolist (v `(("M-H" . ,(helm-mpd-run-helm-for-albums conn))))
+      (define-key m (kbd (car v)) (cdr v)))
+    m))
+
 (defun helm-mpd-build-album-source (conn &optional filter)
   (helm-build-sync-source "Albums"
     :candidates (helm-mpd-album-candidates conn filter)
     :action (helm-mpd-album-actions conn)
-    :keymap (helm-mpd-map conn)
+    :keymap (helm-mpd-album-map conn)
     :migemo t))
 
 ;;;###autoload
