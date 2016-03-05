@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-05 21:22:16 tuemura>
+;; Time-stamp: <2016-03-05 21:52:24 tuemura>
 ;;
 ;;; Code:
 
@@ -33,15 +33,18 @@
                     (read-number "Port: " helm-mpd-port))
     mpd-inter-conn))
 
+(defun filter-variables (vars f)
+  (apply 'concatenate 'list
+         (mapcar (lambda (x)
+                   (unless (eq (aref (symbol-name x) 0) ?&)
+                     (list (funcall f x))))
+                 vars)))
+
 (defmacro defclosure (name vars &optional docstring &rest body)
   "Define a closure."
   (declare (indent defun)
            (doc-string 3))
-  (let ((let-vars (apply 'concatenate 'list
-                         (mapcar (lambda (x)
-                                   (unless (eq (aref (symbol-name x) 0) ?&)
-                                     (list (list x x))))
-                                 vars)))
+  (let ((let-vars (filter-variables vars (lambda (x) (list x x))))
         (doc nil))
     (if (stringp docstring)
         (setq doc (list docstring))
@@ -50,6 +53,34 @@
        ,@doc
        (lexical-let ,let-vars
          ,@body))))
+
+(defmacro helm-mpd-defaction (name vars &rest body)
+  "Define a `helm-mpd' action."
+  (declare (indent defun)
+           (doc-string 3))
+  (let* ((action (intern (format "helm-mpd-%s" name)))
+         (run-action (intern (format "helm-mpd-run-%s" name)))
+         (run-action-doc (format "Run `%s' action from helm session." action))
+         (persistent-action (intern (format "helm-mpd-run-%s-persistent" name)))
+         (persistent-action-doc (format "Run `%s' action without exiting helm session." action))
+         (vars1 (filter-variables vars 'identity)))
+    `(progn
+       (defclosure ,action ,vars
+         ,@body)
+       (defclosure ,run-action ,vars
+         ,run-action-doc
+         (lambda ()
+           (interactive)
+           (with-helm-alive-p
+             (helm-exit-and-execute-action (,action ,@vars1)))))
+       (defclosure ,persistent-action ,vars
+         (lambda ()
+           (interactive)
+           (with-helm-alive-p
+             (helm-attrset 'persistent-action (cons (,action ,@vars1) 'never-split))
+             (helm-execute-persistent-action 'persistent-action)
+             (message nil)
+             (helm-force-update)))))))
 
 ;; ----------------------------------------------------------------
 ;; Common
@@ -123,29 +154,13 @@
   (lambda (song)
     (mpd-play conn (getf song 'Id) t)))
 
-(defclosure helm-mpd-delete-songs (conn)
+(helm-mpd-defaction delete-songs (conn)
   (lambda (_ignore)
     (dolist (song (helm-marked-candidates))
       (mpd-delete conn (getf song 'Id) t)
       (message "Delete %s from the current playlist" (getf song 'Title)))))
 
-(defclosure helm-mpd-run-delete-songs (conn)
-  "Run `helm-mpd-delete-songs' action from `helm-mpd-build-current-playlist-source'."
-  (lambda ()
-    (interactive)
-    (with-helm-alive-p
-      (helm-exit-and-execute-action (helm-mpd-delete-songs conn)))))
-
-(defclosure helm-mpd-run-delete-songs-persistent (conn)
-  (lambda ()
-    (interactive)
-    (with-helm-alive-p
-      (helm-attrset 'delete-action (cons (helm-mpd-delete-songs conn) 'never-split))
-      (helm-execute-persistent-action 'delete-action)
-      (message nil)
-      (helm-force-update))))
-
-(defclosure helm-mpd-swap-songs (conn)
+(helm-mpd-defaction swap-songs (conn)
   (lambda (first)
     (let ((cs (helm-marked-candidates))
           (second nil))
@@ -159,13 +174,6 @@
             (mpd-swap conn (list (getf first 'Id)) (list (getf second 'Id)) t)
             (message "Swap %s and %s" (getf first 'Title) (getf second 'Title)))
         (message "That action can be performed only with two candidates.")))))
-
-(defclosure helm-mpd-run-swap-songs (conn)
-  "Run `helm-mpd-swap-songs' action from `helm-mpd-build-current-playlist-source'."
-  (lambda ()
-    (interactive)
-    (with-helm-alive-p
-      (helm-exit-and-execute-action (helm-mpd-swap-songs conn)))))
 
 (defclosure helm-mpd-move (conn n)
   (lambda (song)
@@ -188,18 +196,12 @@
     (interactive "p")
     (funcall (helm-mpd-run-move-down-persistent conn) (- n))))
 
-(defclosure helm-mpd-edit-songs (conn)
+(helm-mpd-defaction edit-songs (conn)
   (lambda (_ignore)
     (apply #'helm-mpd-spawn-tag-editor
            (mapcar (lambda (song)
                      (getf song 'file))
                    (helm-marked-candidates)))))
-
-(defclosure helm-mpd-run-edit-songs (conn)
-  (lambda ()
-    (interactive)
-    (with-helm-alive-p
-      (helm-exit-and-execute-action (helm-mpd-edit-songs conn)))))
 
 (defun helm-mpd-edit-lyrics (song)
   (find-file (expand-file-name (helm-mpd-format-lyrics song)
@@ -329,15 +331,9 @@
     (helm-mpd-enqueue conn
                       (mpd-search conn 'artist (helm-marked-candidates)))))
 
-(defclosure helm-mpd-helm-for-artists (conn)
+(helm-mpd-defaction helm-for-artists (conn)
   (lambda (_ignore)
     (helm-mpd-library conn `(artist . ,(helm-marked-candidates)))))
-
-(defclosure helm-mpd-run-helm-for-artists (conn)
-  (lambda ()
-    (interactive)
-    (with-helm-alive-p
-      (helm-exit-and-execute-action (helm-mpd-helm-for-artists conn)))))
 
 (defun helm-mpd-artist-actions (conn)
   (helm-make-actions
@@ -381,15 +377,9 @@
     (helm-mpd-enqueue conn
                       (mpd-search conn 'album (helm-marked-candidates)))))
 
-(defclosure helm-mpd-helm-for-albums (conn)
+(helm-mpd-defaction helm-for-albums (conn)
   (lambda (_ignore)
     (helm-mpd-library conn `(album . ,(helm-marked-candidates)))))
-
-(defclosure helm-mpd-run-helm-for-albums (conn)
-  (lambda ()
-    (interactive)
-    (with-helm-alive-p
-      (helm-exit-and-execute-action (helm-mpd-helm-for-albums conn)))))
 
 (defun helm-mpd-album-actions (conn)
   (helm-make-actions
@@ -461,26 +451,11 @@
       (mpd-load-playlist conn playlists)
       (message "Load playlists %s" playlists))))
 
-(defclosure helm-mpd-remove-playlists (conn)
+(helm-mpd-defaction remove-playlists (conn)
   (lambda (_ignore)
     (let ((playlists (helm-marked-candidates)))
       (mpd-remove-playlist conn playlists)
       (message "Remove playlists %s" playlists))))
-
-(defclosure helm-mpd-run-remove-playlists (conn)
-  (lambda ()
-    (interactive)
-    (with-helm-alive-p
-      (helm-exit-and-execute-action (helm-mpd-remove-playlists conn)))))
-
-(defclosure helm-mpd-run-remove-playlists-persistent (conn)
-  (lambda ()
-    (interactive)
-    (with-helm-alive-p
-      (helm-attrset 'delete-action (cons (helm-mpd-remove-playlists conn) 'never-split))
-      (helm-execute-persistent-action 'delete-action)
-      (message nil)
-      (helm-force-update))))
 
 (defun helm-mpd-new-playlist-actions (conn)
   (helm-make-actions
