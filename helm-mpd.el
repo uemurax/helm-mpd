@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-05 19:52:25 tuemura>
+;; Time-stamp: <2016-03-05 20:01:53 tuemura>
 ;;
 ;;; Code:
 
@@ -25,21 +25,13 @@
   :group 'helm-mpd
   :type 'integer)
 
-(defmacro* helm-mpd-with-conn ((var host port &rest args) &rest body)
-  "Evaluate BODY with an MPD connection named VAR."
-  `(let ((,var (mpd-conn-new ,host ,port ,@args)))
-     (unwind-protect
-         (progn
-           (setq *helm-mpd-conn* ,var)
-           ,@body)
-       (mpd-close-connection ,var))))
-
 (defun helm-mpd-read-host-and-port ()
+  "Read MPD host and port, and return a MPD connection."
   (if current-prefix-arg
-      (list (read-string (format "Host (default: %s): " helm-mpd-host)
-                         nil nil helm-mpd-host)
-            (read-number "Port: " helm-mpd-port))
-    (list helm-mpd-host helm-mpd-port)))
+      (mpd-conn-new (read-string (format "Host (default: %s): " helm-mpd-host)
+                                 nil nil helm-mpd-host)
+                    (read-number "Port: " helm-mpd-port))
+    mpd-inter-conn))
 
 (defmacro defclosure (name vars &optional docstring &rest body)
   "Define a closure."
@@ -256,12 +248,11 @@
     :migemo t))
 
 ;;;###autoload
-(defun helm-mpd-current-playlist (host port)
+(defun helm-mpd-current-playlist (conn)
   "Helm for current MPD playlist."
-  (interactive (helm-mpd-read-host-and-port))
-  (helm-mpd-with-conn (conn host port)
-                      (helm :sources (helm-mpd-build-current-playlist-source conn)
-                            :buffer "*helm-mpd-current-playlist*")))
+  (interactive (list (helm-mpd-read-host-and-port)))
+  (helm :sources (helm-mpd-build-current-playlist-source conn)
+        :buffer "*helm-mpd-current-playlist*"))
 
 ;; ----------------------------------------------------------------
 ;; Libraries
@@ -308,12 +299,11 @@
     :keymap (helm-mpd-library-map conn)))
 
 ;;;###autoload
-(defun helm-mpd-songs (host port)
+(defun helm-mpd-songs (conn)
   "Helm for MPD songs."
-  (interactive (helm-mpd-read-host-and-port))
-  (helm-mpd-with-conn (conn host port)
-                      (helm :sources (helm-mpd-build-song-source conn)
-                            :buffer "*helm-mpd-songs*")))
+  (interactive (list (helm-mpd-read-host-and-port)))
+  (helm :sources (helm-mpd-build-song-source conn)
+        :buffer "*helm-mpd-songs*"))
 
 ;;; ----------------------------------------------------------------
 ;;; Put together
@@ -323,12 +313,11 @@
   (list (helm-mpd-build-song-source conn)))
 
 ;;;###autoload
-(defun helm-mpd-library (host port)
+(defun helm-mpd-library (conn)
   "Helm for MPD library."
-  (interactive (helm-mpd-read-host-and-port))
-  (helm-mpd-with-conn (conn host port)
-                      (helm :sources (helm-mpd-build-library-source conn)
-                            :buffer "*helm-mpd-library*")))
+  (interactive (list (helm-mpd-read-host-and-port)))
+  (helm :sources (helm-mpd-build-library-source conn)
+        :buffer "*helm-mpd-library*"))
 
 ;; ----------------------------------------------------------------
 ;; Play lists
@@ -409,26 +398,24 @@
         (helm-mpd-build-new-playlist-source conn)))
 
 ;;;###autoload
-(defun helm-mpd-playlist (host port)
-  (interactive (helm-mpd-read-host-and-port))
-  (helm-mpd-with-conn (conn helm-mpd-host helm-mpd-port)
-                      (helm :sources (helm-mpd-build-playlist-source conn)
-                            :buffer "*helm-mpd-playlist*")))
+(defun helm-mpd-playlist (conn)
+  (interactive (list (helm-mpd-read-host-and-port)))
+  (helm :sources (helm-mpd-build-playlist-source conn)
+        :buffer "*helm-mpd-playlist*"))
 
 ;; ----------------------------------------------------------------
 ;; Put together
 ;; ----------------------------------------------------------------
 
 ;;;###autoload
-(defun helm-mpd (host port)
+(defun helm-mpd (conn)
   "Helm for MPD."
-  (interactive (helm-mpd-read-host-and-port))
-  (helm-mpd-with-conn (conn host port)
-                      (helm :sources (concatenate 'list
-                                                  (list (helm-mpd-build-current-playlist-source conn))
-                                                  (helm-mpd-build-library-source conn)
-                                                  (helm-mpd-build-playlist-source conn))
-                            :buffer "*helm-mpd*")))
+  (interactive (list (helm-mpd-read-host-and-port)))
+  (helm :sources (concatenate 'list
+                              (list (helm-mpd-build-current-playlist-source conn))
+                              (helm-mpd-build-library-source conn)
+                              (helm-mpd-build-playlist-source conn))
+        :buffer "*helm-mpd*"))
 
 (provide 'helm-mpd)
 
