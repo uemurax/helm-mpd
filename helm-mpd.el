@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-05 20:38:07 tuemura>
+;; Time-stamp: <2016-03-05 20:46:27 tuemura>
 ;;
 ;;; Code:
 
@@ -271,11 +271,7 @@
   (lambda ()
     (cl-labels ((get-songs (conn)
                            (if (consp filter)
-                               (let ((type (car filter))
-                                     (arg (cdr filter)))
-                                 (case type
-                                   ((:artist) (mpd-search conn 'artist arg))
-                                   (otherwise (mpd-get-directory-songs conn))))
+                               (mpd-search conn (car filter) (cdr filter))
                              (mpd-get-directory-songs conn))))
       (mapcar (lambda (song)
                 (cons (getf song 'file) song))
@@ -327,7 +323,7 @@
 
 (defclosure helm-mpd-artist-songs (conn)
   (lambda (_ignore)
-    (helm-mpd-songs conn (cons :artist (helm-marked-candidates)))))
+    (helm-mpd-songs conn `(artist . ,(helm-marked-candidates)))))
 
 (defun helm-mpd-artist-actions (conn)
   (helm-make-actions
@@ -348,12 +344,43 @@
         :buffer "*helm-mpd-artists*"))
 
 ;;; ----------------------------------------------------------------
+;;; Albums
+;;; ----------------------------------------------------------------
+
+(defclosure helm-mpd-album-candidates (conn)
+  (lambda ()
+    (mpd-get-artist-albums conn)))
+
+(defclosure helm-mpd-album-songs (conn)
+  (lambda (_ignore)
+    (helm-mpd-songs conn `(album . ,(helm-marked-candidates)))))
+
+(defun helm-mpd-album-actions (conn)
+  (helm-make-actions
+   "Helm for album(s)' songs" (helm-mpd-album-songs conn)))
+
+(defun helm-mpd-build-album-source (conn)
+  (helm-build-sync-source "Albums"
+    :candidates (helm-mpd-album-candidates conn)
+    :action (helm-mpd-album-actions conn)
+    :keymap (helm-mpd-map conn)
+    :migemo t))
+
+;;;###autoload
+(defun helm-mpd-albums (conn)
+  "Helm for albums in MPD library."
+  (interactive (list (helm-mpd-read-host-and-port)))
+  (helm :sources (helm-mpd-build-album-source conn)
+        :buffer "*helm-mpd-albums*"))
+
+;;; ----------------------------------------------------------------
 ;;; Put together
 ;;; ----------------------------------------------------------------
 
 (defun helm-mpd-build-library-source (conn)
   (list (helm-mpd-build-song-source conn)
-        (helm-mpd-build-artist-source conn)))
+        (helm-mpd-build-artist-source conn)
+        (helm-mpd-build-album-source conn)))
 
 ;;;###autoload
 (defun helm-mpd-library (conn)
