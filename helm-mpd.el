@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-05 21:59:30 tuemura>
+;; Time-stamp: <2016-03-05 23:07:35 tuemura>
 ;;
 ;;; Code:
 
@@ -386,7 +386,7 @@
 (defun helm-mpd-album-actions (conn)
   (helm-make-actions
    "Enqueue album(s)' songs" (helm-mpd-enqueue-albums conn)
-   "Helm for album(s)' songs" (helm-mpd-album-songs conn)))
+   "Helm for album(s)' songs" (helm-mpd-helm-for-albums conn)))
 
 (defun helm-mpd-album-map (conn)
   (let ((m (make-sparse-keymap)))
