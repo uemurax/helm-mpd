@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-05 23:07:35 tuemura>
+;; Time-stamp: <2016-03-05 23:12:34 tuemura>
 ;;
 ;;; Code:
 
@@ -94,10 +94,16 @@
       (mpd-update conn)
       (helm-force-update))))
 
+(helm-mpd-defaction goto-top (conn)
+  "Go back to the top of `helm-mpd' session."
+  (lambda (_ignore)
+    (helm-mpd conn)))
+
 (defun helm-mpd-map (conn)
   (let ((m (make-sparse-keymap)))
     (set-keymap-parent m helm-map)
-    (dolist (v `(("C-c u" . ,(helm-mpd-refresh conn))))
+    (dolist (v `(("C-c u" . ,(helm-mpd-refresh conn))
+                 ("C-c t" . ,(helm-mpd-run-goto-top conn))))
       (define-key m (kbd (car v)) (cdr v)))
     m))
 
