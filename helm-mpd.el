@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-05 23:43:39 tuemura>
+;; Time-stamp: <2016-03-06 00:39:38 tuemura>
 ;;
 ;;; Code:
 
@@ -12,7 +12,7 @@
 (require 'libmpdee)
 
 (defgroup helm-mpd nil
-  "Predefined configurations for `helm.el'."
+  "Predefined configurations for `helm-mpd.el'."
   :group 'helm)
 
 (defcustom helm-mpd-host "localhost"
@@ -44,7 +44,8 @@
                  vars)))
 
 (defmacro defclosure (name vars &optional docstring &rest body)
-  "Define a closure."
+  "Define a closure.
+BODY should return a `lambda' form."
   (declare (indent defun)
            (doc-string 3))
   (let ((let-vars (filter-variables vars (lambda (x) (list x x))))
@@ -58,7 +59,17 @@
          ,@body))))
 
 (defmacro helm-mpd-defaction (name vars &rest body)
-  "Define a `helm-mpd' action."
+  "Define a `helm-mpd' action. It defines three closures `helm-mpd-NAME',
+`helm-mpd-run-NAME' and `helm-mpd-run-NAME-persistent'.
+
+BODY must return a helm action.
+
+`helm-mpd-NAME' is used as a helm action.
+
+You can bind some key to `helm-mpd-run-NAME' in helm key map.
+
+`helm-mpd-run-NAME-persistent' is similar to `helm-mpd-run-NAME'
+but does not exit helm session."
   (declare (indent defun)
            (doc-string 3))
   (let* ((action (intern (format "helm-mpd-%s" name)))
@@ -91,6 +102,7 @@
 ;; ----------------------------------------------------------------
 
 (defclosure helm-mpd-refresh (conn)
+  "Update MPD library and recalculate helm candidates."
   (lambda ()
     (interactive)
     (with-helm-alive-p
@@ -103,6 +115,7 @@
     (helm-mpd conn)))
 
 (defun helm-mpd-map (conn)
+  "Parent keymap of all `helm-mpd' keymaps."
   (let ((m (make-sparse-keymap)))
     (set-keymap-parent m helm-map)
     (dolist (v `(("C-c u" . ,(helm-mpd-refresh conn))
@@ -133,6 +146,7 @@
   :type 'string)
 
 (defun helm-mpd-spawn-tag-editor (&rest songs)
+  "Edit SONGS."
   (switch-to-buffer helm-mpd-tag-edit-buffer-name)
   (erase-buffer)
   (apply #'id3-read-with-mid3v2 t
@@ -152,6 +166,7 @@
   :type 'string)
 
 (defun helm-mpd-format-lyrics (song)
+  "File name for SONG's lyrics."
   (format "%s - %s.txt"
           (getf song 'Artist)
           (getf song 'Title)))
@@ -161,16 +176,19 @@
 ;; ----------------------------------------------------------------
 
 (defclosure helm-mpd-play-song (conn)
+  "Play the selected song."
   (lambda (song)
     (mpd-play conn (getf song 'Id) t)))
 
 (helm-mpd-defaction delete-songs (conn)
+  "Delete selected songs from the current playlist."
   (lambda (_ignore)
     (dolist (song (helm-marked-candidates))
       (mpd-delete conn (getf song 'Id) t)
       (message "Delete %s from the current playlist" (getf song 'Title)))))
 
 (helm-mpd-defaction swap-songs (conn)
+  "Swap two selected songs in the current playlist."
   (lambda (first)
     (let ((cs (helm-marked-candidates))
           (second nil))
@@ -186,6 +204,7 @@
         (message "That action can be performed only with two candidates.")))))
 
 (defclosure helm-mpd-move (conn n)
+  "Move the selected song by N."
   (lambda (song)
     (let ((pos (getf song 'Pos)))
       (if pos
@@ -193,6 +212,7 @@
         (message "Invalid song.")))))
 
 (defclosure helm-mpd-run-move-down-persistent (conn)
+  "Move down the selected song without exiting helm session."
   (lambda (n)
     (interactive "p")
     (with-helm-alive-p
@@ -202,11 +222,13 @@
       (helm-force-update))))
 
 (defclosure helm-mpd-run-move-up-persistent (conn)
+  "Move up the selected song without exiting helm session."
   (lambda (n)
     (interactive "p")
     (funcall (helm-mpd-run-move-down-persistent conn) (- n))))
 
 (helm-mpd-defaction edit-songs (conn)
+  "Edit selected songs."
   (lambda (_ignore)
     (apply #'helm-mpd-spawn-tag-editor
            (mapcar (lambda (song)
@@ -214,16 +236,19 @@
                    (helm-marked-candidates)))))
 
 (defun helm-mpd-edit-lyrics (song)
+  "Edit SONG's lyrics."
   (find-file (expand-file-name (helm-mpd-format-lyrics song)
                                helm-mpd-lyrics-directory)))
 
 (defun helm-mpd-run-edit-lyrics ()
+  "Run `helm-mpd-edit-lyrics' from helm session."
   (interactive)
   (with-helm-alive-p
     (helm-exit-and-execute-action 'helm-mpd-edit-lyrics)))
 (put 'helm-mpd-run-edit-lyrics 'helm-only t)
 
 (defun helm-mpd-current-playlist-actions (conn)
+  "Actions for `helm-mpd-current-playlist'."
   (helm-make-actions
    "Play song" (helm-mpd-play-song conn)
    "Delete song(s)" (helm-mpd-delete-songs conn)
@@ -236,6 +261,7 @@
    "Edit lyrics" 'helm-mpd-edit-lyrics))
 
 (defun helm-mpd-current-playlist-map (conn)
+  "Keymap in `helm-mpd-current-playlist'."
   (let ((m (make-sparse-keymap)))
     (set-keymap-parent m (helm-mpd-map conn))
     (dolist (v `(("M-D" . ,(helm-mpd-run-delete-songs conn))
@@ -258,6 +284,7 @@
             (mpd-get-playlist-entry conn))))
 
 (defun helm-mpd-build-current-playlist-source (conn)
+  "Build sources for `helm-mpd-current-playlist'."
   (helm-build-sync-source "Current playlist"
     :candidates (helm-mpd-current-playlist-candidates conn)
     :action (helm-mpd-current-playlist-actions conn)
@@ -280,7 +307,7 @@
 ;;; ----------------------------------------------------------------
 
 (defclosure helm-mpd-song-candidates (conn &optional filter)
-  "Get all files and directories in the MPD database."
+  "Get all songs in MPD library."
   (lambda ()
     (cl-labels ((get-songs (conn)
                            (if (consp filter)
@@ -291,16 +318,19 @@
               (get-songs conn)))))
 
 (defun helm-mpd-enqueue (conn songs)
+  "Enqueue SONGS."
   (mpd-enqueue conn
                (mapcar (lambda (song)
                          (getf song 'file))
                        songs)))
 
 (defclosure helm-mpd-enqueue-files (conn)
+  "Enqueue selected songs."
   (lambda (_ignore)
     (helm-mpd-enqueue conn (helm-marked-candidates))))
 
 (defun helm-mpd-song-actions (conn)
+  "Actions for `helm-mpd-songs'."
   (helm-make-actions
    "Enqueue song(s)" (helm-mpd-enqueue-files conn)
    (when (helm-mpd-has-tag-editor-p)
@@ -309,6 +339,7 @@
    "Edit lyrics" 'helm-mpd-edit-lyrics))
 
 (defun helm-mpd-song-map (conn)
+  "Keymap in `helm-mpd-songs'."
   (let ((m (make-sparse-keymap)))
     (set-keymap-parent m (helm-mpd-map conn))
     (dolist (v `(("M-E" . ,(helm-mpd-run-edit-songs conn))
@@ -317,6 +348,7 @@
     m))
 
 (defun helm-mpd-build-song-source (conn &optional filter)
+  "Build sources for `helm-mpd-songs'."
   (helm-build-sync-source "Songs"
     :candidates (helm-mpd-song-candidates conn filter)
     :action (helm-mpd-song-actions conn)
@@ -334,24 +366,29 @@
 ;;; ----------------------------------------------------------------
 
 (defclosure helm-mpd-artist-candidates (conn)
+  "Get all artists in MPD library."
   (lambda ()
     (mpd-get-artists conn)))
 
 (defclosure helm-mpd-enqueue-artists (conn)
+  "Enqueue all songs of selected artists."
   (lambda (_ignore)
     (helm-mpd-enqueue conn
                       (mpd-search conn 'artist (helm-marked-candidates)))))
 
 (helm-mpd-defaction helm-for-artists (conn)
+  "Run `helm-mpd-library' for selected artists."
   (lambda (_ignore)
     (helm-mpd-library conn `(artist . ,(helm-marked-candidates)))))
 
 (defun helm-mpd-artist-actions (conn)
+  "Actions for `helm-mpd-artists'."
   (helm-make-actions
    "Enqueue artist(s)' songs" (helm-mpd-enqueue-artists conn)
    "Helm for artist(s)" (helm-mpd-helm-for-artists conn)))
 
 (defun helm-mpd-artist-map (conn)
+  "Keymap in `helm-mpd-artists'."
   (let ((m (make-sparse-keymap)))
     (set-keymap-parent m (helm-mpd-map conn))
     (dolist (v `(("M-H" . ,(helm-mpd-run-helm-for-artists conn))))
@@ -359,6 +396,7 @@
     m))
 
 (defun helm-mpd-build-artist-source (conn)
+  "Build sources for `helm-mpd-artists'."
   (helm-build-sync-source "Artists"
     :candidates (helm-mpd-artist-candidates conn)
     :action (helm-mpd-artist-actions conn)
@@ -377,6 +415,7 @@
 ;;; ----------------------------------------------------------------
 
 (defclosure helm-mpd-album-candidates (conn &optional filter)
+  "Get all albums in MPD library."
   (lambda ()
     (let ((artist (if (and (consp filter) (eq (car filter) 'artist))
                       (cdr filter)
@@ -384,20 +423,24 @@
       (mpd-get-artist-albums conn artist))))
 
 (defclosure helm-mpd-enqueue-albums (conn)
+  "Enqueue all songs in selected albums."
   (lambda (_ignore)
     (helm-mpd-enqueue conn
                       (mpd-search conn 'album (helm-marked-candidates)))))
 
 (helm-mpd-defaction helm-for-albums (conn)
+  "Run `helm-mpd-library' for selected albums."
   (lambda (_ignore)
     (helm-mpd-library conn `(album . ,(helm-marked-candidates)))))
 
 (defun helm-mpd-album-actions (conn)
+  "Actions for `helm-mpd-albums'."
   (helm-make-actions
    "Enqueue album(s)' songs" (helm-mpd-enqueue-albums conn)
    "Helm for album(s)' songs" (helm-mpd-helm-for-albums conn)))
 
 (defun helm-mpd-album-map (conn)
+  "Keymap in `helm-mpd-albums'."
   (let ((m (make-sparse-keymap)))
     (set-keymap-parent m (helm-mpd-map conn))
     (dolist (v `(("M-H" . ,(helm-mpd-run-helm-for-albums conn))))
@@ -405,6 +448,7 @@
     m))
 
 (defun helm-mpd-build-album-source (conn &optional filter)
+  "Build sources for `helm-mpd-albums'."
   (helm-build-sync-source "Albums"
     :candidates (helm-mpd-album-candidates conn filter)
     :action (helm-mpd-album-actions conn)
@@ -423,6 +467,7 @@
 ;;; ----------------------------------------------------------------
 
 (defun helm-mpd-build-library-source (conn &optional filter)
+  "Build sources for `helm-mpd-library'."
   (concatenate 'list
                (list (helm-mpd-build-song-source conn filter))
                (unless filter
@@ -432,7 +477,9 @@
 
 ;;;###autoload
 (defun helm-mpd-library (conn &optional filter)
-  "Helm for MPD library."
+  "Helm for MPD library.
+
+This is a mixture of `helm-mpd-songs', `helm-mpd-artists' and `helm-mpd-albums'."
   (interactive (list (helm-mpd-read-host-and-port)))
   (helm :sources (helm-mpd-build-library-source conn filter)
         :buffer "*helm-mpd-library*"))
@@ -452,32 +499,38 @@
       ls)))
 
 (defclosure helm-mpd-save-playlist (conn)
+  "Save the current playlist."
   (lambda (pname)
     (mpd-save-playlist conn pname)
     (message "Save the current playlist as %s" pname)))
 
 (defclosure helm-mpd-load-playlists (conn)
+  "Load selected playlists."
   (lambda (_ignore)
     (let ((playlists (helm-marked-candidates)))
       (mpd-load-playlist conn playlists)
       (message "Load playlists %s" playlists))))
 
 (helm-mpd-defaction remove-playlists (conn)
+  "Remove selected playlists."
   (lambda (_ignore)
     (let ((playlists (helm-marked-candidates)))
       (mpd-remove-playlist conn playlists)
       (message "Remove playlists %s" playlists))))
 
 (defun helm-mpd-new-playlist-actions (conn)
+  "Actions for new playlists."
   (helm-make-actions
    "Save current playlist to file" (helm-mpd-save-playlist conn)))
 
 (defun helm-mpd-playlist-actions (conn)
+  "Actions for existing playlists."
   (helm-make-actions
    "Load playlist(s)" (helm-mpd-load-playlists conn)
    "Remove playlist(s)" (helm-mpd-remove-playlists conn)))
 
 (defun helm-mpd-playlist-map (conn)
+  "Keymap in `helm-mpd-playlist'."
   (let ((m (make-sparse-keymap)))
     (set-keymap-parent m (helm-mpd-map conn))
     (dolist (v `(("M-D" . ,(helm-mpd-run-remove-playlists conn))
@@ -486,22 +539,26 @@
     m))
 
 (defun helm-mpd-build-existing-playlist-source (conn)
+  "Build sources for existing playlists."
   (helm-build-sync-source "Playlists"
     :candidates (helm-mpd-playlist-candidates conn)
     :action (helm-mpd-playlist-actions conn)
     :keymap (helm-mpd-playlist-map conn)))
 
 (defun helm-mpd-build-new-playlist-source (conn)
+  "Build sources for new playlists."
   (helm-build-dummy-source "Create playlist"
     :action (helm-mpd-new-playlist-actions conn)
     :keymap (helm-mpd-map conn)))
 
 (defun helm-mpd-build-playlist-source (conn)
+  "Build sources for `helm-mpd-playlist'."
   (list (helm-mpd-build-existing-playlist-source conn)
         (helm-mpd-build-new-playlist-source conn)))
 
 ;;;###autoload
 (defun helm-mpd-playlist (conn)
+  "Helm for MPD playlists."
   (interactive (list (helm-mpd-read-host-and-port)))
   (helm :sources (helm-mpd-build-playlist-source conn)
         :buffer "*helm-mpd-playlist*"))
@@ -512,7 +569,10 @@
 
 ;;;###autoload
 (defun helm-mpd (conn)
-  "Helm for MPD."
+  "Helm for MPD.
+
+This is a mixture of `helm-mpd-current-playlist', `helm-mpd-library' and
+`helm-mpd-playlist'."
   (interactive (list (helm-mpd-read-host-and-port)))
   (helm :sources (concatenate 'list
                               (list (helm-mpd-build-current-playlist-source conn))
