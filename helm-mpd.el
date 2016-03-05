@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-05 20:01:53 tuemura>
+;; Time-stamp: <2016-03-05 20:38:07 tuemura>
 ;;
 ;;; Code:
 
@@ -37,7 +37,11 @@
   "Define a closure."
   (declare (indent defun)
            (doc-string 3))
-  (let ((let-vars (mapcar (lambda (x) (list x x)) vars))
+  (let ((let-vars (apply 'concatenate 'list
+                         (mapcar (lambda (x)
+                                   (unless (eq (aref (symbol-name x) 0) ?&)
+                                     (list (list x x))))
+                                 vars)))
         (doc nil))
     (if (stringp docstring)
         (setq doc (list docstring))
@@ -262,12 +266,20 @@
 ;;; Songs
 ;;; ----------------------------------------------------------------
 
-(defclosure helm-mpd-song-candidates (conn)
+(defclosure helm-mpd-song-candidates (conn &optional filter)
   "Get all files and directories in the MPD database."
   (lambda ()
-    (mapcar (lambda (song)
-              (cons (getf song 'file) song))
-            (mpd-get-directory-songs conn))))
+    (cl-labels ((get-songs (conn)
+                           (if (consp filter)
+                               (let ((type (car filter))
+                                     (arg (cdr filter)))
+                                 (case type
+                                   ((:artist) (mpd-search conn 'artist arg))
+                                   (otherwise (mpd-get-directory-songs conn))))
+                             (mpd-get-directory-songs conn))))
+      (mapcar (lambda (song)
+                (cons (getf song 'file) song))
+              (get-songs conn)))))
 
 (defclosure helm-mpd-enqueue-files (conn)
   (lambda (_ignore)
@@ -292,25 +304,56 @@
       (define-key m (kbd (car v)) (cdr v)))
     m))
 
-(defun helm-mpd-build-song-source (conn)
+(defun helm-mpd-build-song-source (conn &optional filter)
   (helm-build-sync-source "Songs"
-    :candidates (helm-mpd-song-candidates conn)
+    :candidates (helm-mpd-song-candidates conn filter)
     :action (helm-mpd-library-actions conn)
     :keymap (helm-mpd-library-map conn)))
 
 ;;;###autoload
-(defun helm-mpd-songs (conn)
-  "Helm for MPD songs."
+(defun helm-mpd-songs (conn &optional filter)
+  "Helm for songs in MPD library."
   (interactive (list (helm-mpd-read-host-and-port)))
-  (helm :sources (helm-mpd-build-song-source conn)
+  (helm :sources (helm-mpd-build-song-source conn filter)
         :buffer "*helm-mpd-songs*"))
+
+;;; ----------------------------------------------------------------
+;;; Artists
+;;; ----------------------------------------------------------------
+
+(defclosure helm-mpd-artist-candidates (conn)
+  (lambda ()
+    (mpd-get-artists conn)))
+
+(defclosure helm-mpd-artist-songs (conn)
+  (lambda (_ignore)
+    (helm-mpd-songs conn (cons :artist (helm-marked-candidates)))))
+
+(defun helm-mpd-artist-actions (conn)
+  (helm-make-actions
+   "Helm for artist(s)' songs" (helm-mpd-artist-songs conn)))
+
+(defun helm-mpd-build-artist-source (conn)
+  (helm-build-sync-source "Artists"
+    :candidates (helm-mpd-artist-candidates conn)
+    :action (helm-mpd-artist-actions conn)
+    :keymap (helm-mpd-map conn)
+    :migemo t))
+
+;;;###autoload
+(defun helm-mpd-artists (conn)
+  "Helm for artists in MPD library."
+  (interactive (list (helm-mpd-read-host-and-port)))
+  (helm :sources (helm-mpd-build-artist-source conn)
+        :buffer "*helm-mpd-artists*"))
 
 ;;; ----------------------------------------------------------------
 ;;; Put together
 ;;; ----------------------------------------------------------------
 
 (defun helm-mpd-build-library-source (conn)
-  (list (helm-mpd-build-song-source conn)))
+  (list (helm-mpd-build-song-source conn)
+        (helm-mpd-build-artist-source conn)))
 
 ;;;###autoload
 (defun helm-mpd-library (conn)
