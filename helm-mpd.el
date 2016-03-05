@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-05 21:52:24 tuemura>
+;; Time-stamp: <2016-03-05 21:55:21 tuemura>
 ;;
 ;;; Code:
 
@@ -231,6 +231,7 @@
     (dolist (v `(("M-D" . ,(helm-mpd-run-delete-songs conn))
                  ("C-c d" . ,(helm-mpd-run-delete-songs-persistent conn))
                  ("M-S" . ,(helm-mpd-run-swap-songs conn))
+                 ("C-c s" . ,(helm-mpd-run-swap-songs-persistent conn))
                  ("C-c C-n" . ,(helm-mpd-run-move-down-persistent conn))
                  ("C-c C-p" . ,(helm-mpd-run-move-up-persistent conn))
                  ,@(when (helm-mpd-has-tag-editor-p)
