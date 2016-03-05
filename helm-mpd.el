@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-05 21:55:21 tuemura>
+;; Time-stamp: <2016-03-05 21:59:30 tuemura>
 ;;
 ;;; Code:
 
@@ -74,6 +74,7 @@
            (with-helm-alive-p
              (helm-exit-and-execute-action (,action ,@vars1)))))
        (defclosure ,persistent-action ,vars
+         ,persistent-action-doc
          (lambda ()
            (interactive)
            (with-helm-alive-p
