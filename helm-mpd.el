@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-05 21:09:20 tuemura>
+;; Time-stamp: <2016-03-05 21:14:04 tuemura>
 ;;
 ;;; Code:
 
@@ -368,9 +368,9 @@
     (helm-mpd-enqueue conn
                       (mpd-search conn 'album (helm-marked-candidates)))))
 
-(defclosure helm-mpd-album-songs (conn)
+(defclosure helm-mpd-helm-for-albums (conn)
   (lambda (_ignore)
-    (helm-mpd-songs conn `(album . ,(helm-marked-candidates)))))
+    (helm-mpd-library conn `(album . ,(helm-marked-candidates)))))
 
 (defun helm-mpd-album-actions (conn)
   (helm-make-actions
@@ -398,7 +398,7 @@
 (defun helm-mpd-build-library-source (conn &optional filter)
   (concatenate 'list
                (list (helm-mpd-build-song-source conn filter))
-               (unless (and filter (eq (car filter) 'artist))
+               (unless filter
                  (list (helm-mpd-build-artist-source conn)))
                (unless (and filter (eq (car filter) 'album))
                  (list (helm-mpd-build-album-source conn filter)))))
