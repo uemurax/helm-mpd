@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-02-20 19:57:19 tuemura>
+;; Time-stamp: <2016-03-05 19:50:22 tuemura>
 ;;
 ;;; Code:
 
@@ -274,6 +274,10 @@
               (cons (getf song 'file) song))
             (mpd-get-directory-songs conn))))
 
+;;; ----------------------------------------------------------------
+;;; Songs
+;;; ----------------------------------------------------------------
+
 (defclosure helm-mpd-enqueue-files (conn)
   (lambda (_ignore)
     (mpd-enqueue conn
@@ -281,7 +285,7 @@
                            (getf song 'file))
                          (helm-marked-candidates)))))
 
-(defun helm-mpd-library-actions (conn)
+(defun helm-mpd-song-actions (conn)
   (helm-make-actions
    "Enqueue song(s)" (helm-mpd-enqueue-files conn)
    (when (helm-mpd-has-tag-editor-p)
@@ -289,7 +293,7 @@
    (helm-mpd-edit-songs conn)
    "Edit lyrics" 'helm-mpd-edit-lyrics))
 
-(defun helm-mpd-library-map (conn)
+(defun helm-mpd-song-map (conn)
   (let ((m (make-sparse-keymap)))
     (set-keymap-parent m (helm-mpd-map conn))
     (dolist (v `(("M-E" . ,(helm-mpd-run-edit-songs conn))
@@ -297,11 +301,26 @@
       (define-key m (kbd (car v)) (cdr v)))
     m))
 
-(defun helm-mpd-build-library-source (conn)
-  (helm-build-sync-source "Library"
+(defun helm-mpd-build-song-source (conn)
+  (helm-build-sync-source "Songs"
     :candidates (helm-mpd-library-candidates conn)
     :action (helm-mpd-library-actions conn)
     :keymap (helm-mpd-library-map conn)))
+
+;;;###autoload
+(defun helm-mpd-songs (host port)
+  "Helm for MPD songs."
+  (interactive (helm-mpd-read-host-and-port))
+  (helm-mpd-with-conn (conn host port)
+                      (helm :sources (helm-mpd-build-song-source conn)
+                            :buffer "*helm-mpd-songs*")))
+
+;;; ----------------------------------------------------------------
+;;; Put together
+;;; ----------------------------------------------------------------
+
+(defun helm-mpd-build-library-source (conn)
+  (list (helm-mpd-build-song-source conn)))
 
 ;;;###autoload
 (defun helm-mpd-library (host port)
@@ -374,7 +393,7 @@
       (define-key m (kbd (car v)) (cdr v)))
     m))
 
-(defun helm-mpd-build-playlist-source (conn)
+(defun helm-mpd-build-existing-playlist-source (conn)
   (helm-build-sync-source "Playlists"
     :candidates (helm-mpd-playlist-candidates conn)
     :action (helm-mpd-playlist-actions conn)
@@ -385,12 +404,15 @@
     :action (helm-mpd-new-playlist-actions conn)
     :keymap (helm-mpd-map conn)))
 
+(defun helm-mpd-build-playlist-source (conn)
+  (list (helm-mpd-build-existing-playlist-source conn)
+        (helm-mpd-build-new-playlist-source conn)))
+
 ;;;###autoload
 (defun helm-mpd-playlist (host port)
   (interactive (helm-mpd-read-host-and-port))
   (helm-mpd-with-conn (conn helm-mpd-host helm-mpd-port)
-                      (helm :sources (list (helm-mpd-build-playlist-source conn)
-                                           (helm-mpd-build-new-playlist-source conn))
+                      (helm :sources (helm-mpd-build-playlist-source conn)
                             :buffer "*helm-mpd-playlist*")))
 
 ;; ----------------------------------------------------------------
@@ -402,10 +424,10 @@
   "Helm for MPD."
   (interactive (helm-mpd-read-host-and-port))
   (helm-mpd-with-conn (conn host port)
-                      (helm :sources (list (helm-mpd-build-current-playlist-source conn)
-                                           (helm-mpd-build-library-source conn)
-                                           (helm-mpd-build-playlist-source conn)
-                                           (helm-mpd-build-new-playlist-source conn))
+                      (helm :sources (concatenate 'list
+                                                  (list (helm-mpd-build-current-playlist-source conn))
+                                                  (helm-mpd-build-library-source conn)
+                                                  (helm-mpd-build-playlist-source conn))
                             :buffer "*helm-mpd*")))
 
 (provide 'helm-mpd)
