@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-05 23:12:34 tuemura>
+;; Time-stamp: <2016-03-05 23:43:39 tuemura>
 ;;
 ;;; Code:
 
@@ -25,13 +25,16 @@
   :group 'helm-mpd
   :type 'integer)
 
+(defvar helm-mpd-inter-conn (mpd-conn-new helm-mpd-host helm-mpd-port)
+  "Default MPD connection for `helm-mpd'.")
+
 (defun helm-mpd-read-host-and-port ()
   "Read MPD host and port, and return a MPD connection."
   (if current-prefix-arg
       (mpd-conn-new (read-string (format "Host (default: %s): " helm-mpd-host)
                                  nil nil helm-mpd-host)
                     (read-number "Port: " helm-mpd-port))
-    mpd-inter-conn))
+    helm-mpd-inter-conn))
 
 (defun filter-variables (vars f)
   (apply 'concatenate 'list
