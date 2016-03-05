@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-06 00:39:38 tuemura>
+;; Time-stamp: <2016-03-06 01:19:57 tuemura>
 ;;
 ;;; Code:
 
@@ -122,6 +122,42 @@ but does not exit helm session."
                  ("C-c t" . ,(helm-mpd-run-goto-top conn))))
       (define-key m (kbd (car v)) (cdr v)))
     m))
+
+;; ----------------------------------------------------------------
+;; Song format
+;; ----------------------------------------------------------------
+
+(defface helm-mpd-artist-face
+  '((t (:inherit font-lock-keyword-face)))
+  "Artist face."
+  :group 'helm-mpd)
+
+(defface helm-mpd-title-face
+  '((t (:inherit font-lock-type-face)))
+  "Title face."
+  :group 'helm-mpd)
+
+(defface helm-mpd-album-face
+  '((t (:inherit font-lock-constant-face)))
+  "Album face."
+  :group 'helm-mpd)
+
+(defcustom helm-mpd-song-format
+  (lambda (song)
+    (concat (propertize (getf song 'Artist) 'face 'helm-mpd-artist-face)
+            " "
+            (propertize (getf song 'Title) 'face 'helm-mpd-title-face)
+            " "
+            (propertize (getf song 'Album) 'face 'helm-mpd-album-face)))
+  "Function to format a song."
+  :group 'helm-mpd
+  :type 'function)
+
+(defun helm-mpd-format-songs (songs)
+  "Format song candidates."
+  (mapcar (lambda (song)
+            (cons (funcall helm-mpd-song-format song) song))
+          songs))
 
 ;; ----------------------------------------------------------------
 ;; (Optional) Tag editor
@@ -279,9 +315,7 @@ but does not exit helm session."
 (defclosure helm-mpd-current-playlist-candidates (conn)
   "Get current playlist."
   (lambda ()
-    (mapcar (lambda (song)
-              (cons (getf song 'Title) song))
-            (mpd-get-playlist-entry conn))))
+    (helm-mpd-format-songs (mpd-get-playlist-entry conn))))
 
 (defun helm-mpd-build-current-playlist-source (conn)
   "Build sources for `helm-mpd-current-playlist'."
@@ -313,9 +347,7 @@ but does not exit helm session."
                            (if (consp filter)
                                (mpd-search conn (car filter) (cdr filter))
                              (mpd-get-directory-songs conn))))
-      (mapcar (lambda (song)
-                (cons (getf song 'file) song))
-              (get-songs conn)))))
+      (helm-mpd-format-songs (get-songs conn)))))
 
 (defun helm-mpd-enqueue (conn songs)
   "Enqueue SONGS."
@@ -352,7 +384,8 @@ but does not exit helm session."
   (helm-build-sync-source "Songs"
     :candidates (helm-mpd-song-candidates conn filter)
     :action (helm-mpd-song-actions conn)
-    :keymap (helm-mpd-song-map conn)))
+    :keymap (helm-mpd-song-map conn)
+    :migemo t))
 
 ;;;###autoload
 (defun helm-mpd-songs (conn &optional filter)
@@ -368,7 +401,9 @@ but does not exit helm session."
 (defclosure helm-mpd-artist-candidates (conn)
   "Get all artists in MPD library."
   (lambda ()
-    (mpd-get-artists conn)))
+    (mapcar (lambda (x)
+              (propertize x 'face 'helm-mpd-artist-face))
+            (mpd-get-artists conn))))
 
 (defclosure helm-mpd-enqueue-artists (conn)
   "Enqueue all songs of selected artists."
@@ -420,7 +455,9 @@ but does not exit helm session."
     (let ((artist (if (and (consp filter) (eq (car filter) 'artist))
                       (cdr filter)
                     nil)))
-      (mpd-get-artist-albums conn artist))))
+      (mapcar (lambda (x)
+                (propertize x 'face 'helm-mpd-album-face))
+              (mpd-get-artist-albums conn artist)))))
 
 (defclosure helm-mpd-enqueue-albums (conn)
   "Enqueue all songs in selected albums."
