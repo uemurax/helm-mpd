@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-07 03:26:53 tuemura>
+;; Time-stamp: <2016-03-07 03:47:26 tuemura>
 ;;
 ;;; Code:
 
@@ -131,18 +131,18 @@ but does not exit helm session."
   `(:eval (let ((song (mpd-get-current-song ,conn))
                 (status (mpd-get-status ,conn)))
             (run-with-timer 1 nil 'force-mode-line-update t)
-            (list (case (getf status 'state)
+            (list (case (plist-get status 'state)
                     ((play) "Playing")
                     ((pause) "Paused")
                     ((stop) "Stopped"))
                   ": "
                   (funcall helm-mpd-song-format song)
-                  " [" (helm-mpd-format-time (getf status 'time-elapsed))
-                  "/" (helm-mpd-format-time (getf status 'time-total))
+                  " [" (helm-mpd-format-time (plist-get status 'time-elapsed))
+                  "/" (helm-mpd-format-time (plist-get status 'time-total))
                   "]"
-                  " [" (when (> (getf status 'repeat) 0) "r")
-                  (when (> (getf status 'random) 0) "z")
-                  (when (> (string-to-int (getf status 'single)) 0) "s")
+                  " [" (when (> (plist-get status 'repeat) 0) "r")
+                  (when (> (plist-get status 'random) 0) "z")
+                  (when (> (string-to-int (plist-get status 'single)) 0) "s")
                   "]"))))
 
 (defclass helm-mpd-source (helm-source-sync)
@@ -217,7 +217,7 @@ but does not exit helm session."
 (defcustom helm-mpd-song-format
   (lambda (song)
     (mapconcat (lambda (x)
-                 (propertize (or (getf song (car x)) "") 'face (cdr x)))
+                 (propertize (or (plist-get song (car x)) "") 'face (cdr x)))
                '((Artist . helm-mpd-artist-face)
                  (Title . helm-mpd-title-face)
                  (Album . helm-mpd-album-face))
@@ -254,6 +254,8 @@ but does not exit helm session."
   :group 'helm-mpd
   :type 'string)
 
+(eval-when-compile
+  (declare-function id3-edit-mode 'emacs-id3))
 (defun helm-mpd-spawn-tag-editor (&rest songs)
   "Edit SONGS."
   (switch-to-buffer helm-mpd-tag-edit-buffer-name)
@@ -277,8 +279,8 @@ but does not exit helm session."
 (defun helm-mpd-format-lyrics (song)
   "File name for SONG's lyrics."
   (format "%s - %s.txt"
-          (getf song 'Artist)
-          (getf song 'Title)))
+          (plist-get song 'Artist)
+          (plist-get song 'Title)))
 
 ;; ----------------------------------------------------------------
 ;; Current playlist
@@ -287,14 +289,14 @@ but does not exit helm session."
 (defclosure helm-mpd-play-song (conn)
   "Play the selected song."
   (lambda (song)
-    (mpd-play conn (getf song 'Id) t)))
+    (mpd-play conn (plist-get song 'Id) t)))
 
 (helm-mpd-defaction delete-songs (conn)
   "Delete selected songs from the current playlist."
   (lambda (_ignore)
     (dolist (song (helm-marked-candidates))
-      (mpd-delete conn (getf song 'Id) t)
-      (message "Delete %s from the current playlist" (getf song 'Title)))))
+      (mpd-delete conn (plist-get song 'Id) t)
+      (message "Delete %s from the current playlist" (plist-get song 'Title)))))
 
 (helm-mpd-defaction swap-songs (conn)
   "Swap two selected songs in the current playlist."
@@ -308,14 +310,14 @@ but does not exit helm session."
              (setq second (car cs))))
       (if second
           (progn
-            (mpd-swap conn (list (getf first 'Id)) (list (getf second 'Id)) t)
-            (message "Swap %s and %s" (getf first 'Title) (getf second 'Title)))
+            (mpd-swap conn (list (plist-get first 'Id)) (list (plist-get second 'Id)) t)
+            (message "Swap %s and %s" (plist-get first 'Title) (plist-get second 'Title)))
         (message "That action can be performed only with two candidates.")))))
 
 (defclosure helm-mpd-move (conn n)
   "Move the selected song by N."
   (lambda (song)
-    (let ((pos (getf song 'Pos)))
+    (let ((pos (plist-get song 'Pos)))
       (if pos
           (mpd-move conn (list pos) (list (+ pos n)))
         (message "Invalid song.")))))
@@ -341,7 +343,7 @@ but does not exit helm session."
   (lambda (_ignore)
     (apply #'helm-mpd-spawn-tag-editor
            (mapcar (lambda (song)
-                     (getf song 'file))
+                     (plist-get song 'file))
                    (helm-marked-candidates)))))
 
 (defun helm-mpd-edit-lyrics (song)
@@ -426,7 +428,7 @@ but does not exit helm session."
   "Enqueue SONGS."
   (mpd-enqueue conn
                (mapcar (lambda (song)
-                         (getf song 'file))
+                         (plist-get song 'file))
                        songs)))
 
 (defclosure helm-mpd-enqueue-files (conn)
