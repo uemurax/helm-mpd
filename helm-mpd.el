@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-07 00:07:40 tuemura>
+;; Time-stamp: <2016-03-07 00:12:57 tuemura>
 ;;
 ;;; Code:
 
@@ -98,8 +98,8 @@ but does not exit helm session."
          (lambda ()
            (interactive)
            (with-helm-alive-p
-             (helm-attrset 'persistent-action (cons (,action ,@vars1) 'never-split))
-             (helm-execute-persistent-action 'persistent-action)
+             (helm-attrset 'mpd-persistent-action (cons (,action ,@vars1) 'never-split))
+             (helm-execute-persistent-action 'mpd-persistent-action)
              (message nil)
              (helm-force-update)))))))
 
@@ -391,10 +391,10 @@ but does not exit helm session."
 (defun helm-mpd-build-current-playlist-source (conn)
   "Build sources for `helm-mpd-current-playlist'."
   (helm-mpd-build-mpd-source conn "Current playlist"
-    :candidates (helm-mpd-current-playlist-candidates conn)
-    :action (helm-mpd-current-playlist-actions conn)
-    :keymap (helm-mpd-current-playlist-map conn)
-    :migemo t))
+                             :candidates (helm-mpd-current-playlist-candidates conn)
+                             :action (helm-mpd-current-playlist-actions conn)
+                             :keymap (helm-mpd-current-playlist-map conn)
+                             :migemo t))
 
 ;;;###autoload
 (defun helm-mpd-current-playlist (conn)
@@ -453,10 +453,10 @@ but does not exit helm session."
 (defun helm-mpd-build-song-source (conn &optional filter)
   "Build sources for `helm-mpd-songs'."
   (helm-mpd-build-mpd-source conn "Songs"
-    :candidates (helm-mpd-song-candidates conn filter)
-    :action (helm-mpd-song-actions conn)
-    :keymap (helm-mpd-song-map conn)
-    :migemo t))
+                             :candidates (helm-mpd-song-candidates conn filter)
+                             :action (helm-mpd-song-actions conn)
+                             :keymap (helm-mpd-song-map conn)
+                             :migemo t))
 
 ;;;###autoload
 (defun helm-mpd-songs (conn &optional filter)
@@ -504,10 +504,10 @@ but does not exit helm session."
 (defun helm-mpd-build-artist-source (conn)
   "Build sources for `helm-mpd-artists'."
   (helm-mpd-build-mpd-source conn "Artists"
-    :candidates (helm-mpd-artist-candidates conn)
-    :action (helm-mpd-artist-actions conn)
-    :keymap (helm-mpd-artist-map conn)
-    :migemo t))
+                             :candidates (helm-mpd-artist-candidates conn)
+                             :action (helm-mpd-artist-actions conn)
+                             :keymap (helm-mpd-artist-map conn)
+                             :migemo t))
 
 ;;;###autoload
 (defun helm-mpd-artists (conn)
@@ -558,10 +558,10 @@ but does not exit helm session."
 (defun helm-mpd-build-album-source (conn &optional filter)
   "Build sources for `helm-mpd-albums'."
   (helm-mpd-build-mpd-source conn "Albums"
-    :candidates (helm-mpd-album-candidates conn filter)
-    :action (helm-mpd-album-actions conn)
-    :keymap (helm-mpd-album-map conn)
-    :migemo t))
+                             :candidates (helm-mpd-album-candidates conn filter)
+                             :action (helm-mpd-album-actions conn)
+                             :keymap (helm-mpd-album-map conn)
+                             :migemo t))
 
 ;;;###autoload
 (defun helm-mpd-albums (conn &optional filter)
@@ -649,9 +649,9 @@ This is a mixture of `helm-mpd-songs', `helm-mpd-artists' and `helm-mpd-albums'.
 (defun helm-mpd-build-existing-playlist-source (conn)
   "Build sources for existing playlists."
   (helm-mpd-build-mpd-source conn "Playlists"
-    :candidates (helm-mpd-playlist-candidates conn)
-    :action (helm-mpd-playlist-actions conn)
-    :keymap (helm-mpd-playlist-map conn)))
+                             :candidates (helm-mpd-playlist-candidates conn)
+                             :action (helm-mpd-playlist-actions conn)
+                             :keymap (helm-mpd-playlist-map conn)))
 
 (defun helm-mpd-build-new-playlist-source (conn)
   "Build sources for new playlists."
