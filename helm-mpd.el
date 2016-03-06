@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-06 01:27:35 tuemura>
+;; Time-stamp: <2016-03-06 22:55:35 tuemura>
 ;;
 ;;; Code:
 
@@ -25,7 +25,12 @@
   :group 'helm-mpd
   :type 'integer)
 
-(defvar helm-mpd-inter-conn (mpd-conn-new helm-mpd-host helm-mpd-port)
+(defcustom helm-mpd-timeout 10
+  "Default timeout for `helm-mpd'."
+  :group 'helm-mpd
+  :type 'integer)
+
+(defvar helm-mpd-inter-conn (mpd-conn-new helm-mpd-host helm-mpd-port helm-mpd-timeout)
   "Default MPD connection for `helm-mpd'.")
 
 (defun helm-mpd-read-host-and-port ()
@@ -33,7 +38,8 @@
   (if current-prefix-arg
       (mpd-conn-new (read-string (format "Host (default: %s): " helm-mpd-host)
                                  nil nil helm-mpd-host)
-                    (read-number "Port: " helm-mpd-port))
+                    (read-number "Port: " helm-mpd-port)
+                    helm-mpd-timeout)
     helm-mpd-inter-conn))
 
 (defun filter-variables (vars f)
@@ -114,12 +120,77 @@ but does not exit helm session."
   (lambda (_ignore)
     (helm-mpd conn)))
 
+(defun helm-mpd-format-time (sec)
+  "Format SEC."
+  (when sec
+    (format-time-string "%M:%S" (list 0 sec 0 0))))
+
+(defun helm-mpd-mode-line (conn)
+  "Mode line format for `helm-mpd'."
+  `(:eval (let ((song (mpd-get-current-song ,conn))
+                (status (mpd-get-status ,conn)))
+            (run-with-timer 1 nil 'force-mode-line-update t)
+            (list (case (getf status 'state)
+                    ((play) "Playing")
+                    ((pause) "Paused")
+                    ((stop) "Stopped"))
+                    ": "
+                    (funcall helm-mpd-song-format song)
+                    " [" (helm-mpd-format-time (getf status 'time-elapsed))
+                    "/" (helm-mpd-format-time (getf status 'time-total))
+                    "]"
+                    " [" (when (> (getf status 'repeat) 0) "r")
+                    (when (> (getf status 'random) 0) "z")
+                    (when (> (string-to-int (getf status 'single)) 0) "s")
+                    "]"))))
+
+(defclass helm-mpd-source (helm-source-sync)
+  ((mpd-conn :initarg :mpd-conn)))
+
+(defun helm-mpd-build-mpd-source (conn name &rest args)
+  (apply #'helm-make-source name 'helm-mpd-source
+         :mpd-conn conn
+         args))
+
+(defun helm-mpd-display-mode-line-ad (orig source &optional force)
+  "Advice for `helm-display-mode-line'."
+  (let ((conn0 (assoc 'mpd-conn source)))
+    (if conn0
+        (let ((conn (cdr conn0)))
+          (setq-local mode-line-format (helm-mpd-mode-line conn))
+          (when force
+            (force-mode-line-update)))
+      (funcall orig source force))))
+
+(advice-add 'helm-display-mode-line :around 'helm-mpd-display-mode-line-ad)
+
+(defclosure helm-mpd-simple-mpd-action (fun conn)
+  "Make a simple MPD action."
+  (lambda ()
+    (interactive)
+    (funcall fun conn)))
+
+(defun helm-mpd-action-map (conn)
+  "Keymap for MPD action in `helm-mpd' session."
+  (let ((m (make-sparse-keymap)))
+    (dolist (v '(("p" . mpd-pause)
+                 ("s" . mpd-stop)
+                 ("r" . mpd-toggle-repeat)
+                 ("z" . mpd-toggle-random)
+                 ("y" . mpd-toggle-single)
+                 (">" . mpd-next)
+                 ("<" . mpd-prev)
+                 ("u" . mpd-update)))
+      (define-key m (kbd (car v)) (helm-mpd-simple-mpd-action (cdr v) conn)))
+    m))
+
 (defun helm-mpd-map (conn)
   "Parent keymap of all `helm-mpd' keymaps."
   (let ((m (make-sparse-keymap)))
     (set-keymap-parent m helm-map)
     (dolist (v `(("C-c u" . ,(helm-mpd-refresh conn))
-                 ("C-c t" . ,(helm-mpd-run-goto-top conn))))
+                 ("C-c t" . ,(helm-mpd-run-goto-top conn))
+                 ("C-c C-c" . ,(helm-mpd-action-map conn))))
       (define-key m (kbd (car v)) (cdr v)))
     m))
 
@@ -319,7 +390,7 @@ but does not exit helm session."
 
 (defun helm-mpd-build-current-playlist-source (conn)
   "Build sources for `helm-mpd-current-playlist'."
-  (helm-build-sync-source "Current playlist"
+  (helm-mpd-build-mpd-source conn "Current playlist"
     :candidates (helm-mpd-current-playlist-candidates conn)
     :action (helm-mpd-current-playlist-actions conn)
     :keymap (helm-mpd-current-playlist-map conn)
@@ -381,7 +452,7 @@ but does not exit helm session."
 
 (defun helm-mpd-build-song-source (conn &optional filter)
   "Build sources for `helm-mpd-songs'."
-  (helm-build-sync-source "Songs"
+  (helm-mpd-build-mpd-source conn "Songs"
     :candidates (helm-mpd-song-candidates conn filter)
     :action (helm-mpd-song-actions conn)
     :keymap (helm-mpd-song-map conn)
@@ -432,7 +503,7 @@ but does not exit helm session."
 
 (defun helm-mpd-build-artist-source (conn)
   "Build sources for `helm-mpd-artists'."
-  (helm-build-sync-source "Artists"
+  (helm-mpd-build-mpd-source conn "Artists"
     :candidates (helm-mpd-artist-candidates conn)
     :action (helm-mpd-artist-actions conn)
     :keymap (helm-mpd-artist-map conn)
@@ -486,7 +557,7 @@ but does not exit helm session."
 
 (defun helm-mpd-build-album-source (conn &optional filter)
   "Build sources for `helm-mpd-albums'."
-  (helm-build-sync-source "Albums"
+  (helm-mpd-build-mpd-source conn "Albums"
     :candidates (helm-mpd-album-candidates conn filter)
     :action (helm-mpd-album-actions conn)
     :keymap (helm-mpd-album-map conn)
@@ -577,7 +648,7 @@ This is a mixture of `helm-mpd-songs', `helm-mpd-artists' and `helm-mpd-albums'.
 
 (defun helm-mpd-build-existing-playlist-source (conn)
   "Build sources for existing playlists."
-  (helm-build-sync-source "Playlists"
+  (helm-mpd-build-mpd-source conn "Playlists"
     :candidates (helm-mpd-playlist-candidates conn)
     :action (helm-mpd-playlist-actions conn)
     :keymap (helm-mpd-playlist-map conn)))
