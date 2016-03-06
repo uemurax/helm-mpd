@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-07 00:14:20 tuemura>
+;; Time-stamp: <2016-03-07 03:26:53 tuemura>
 ;;
 ;;; Code:
 
@@ -49,20 +49,21 @@
                      (list (funcall f x))))
                  vars)))
 
-(defmacro defclosure (name vars &optional docstring &rest body)
-  "Define a closure.
+(eval-when-compile
+  (defmacro defclosure (name vars &optional docstring &rest body)
+    "Define a closure.
 BODY should return a `lambda' form."
-  (declare (indent defun)
-           (doc-string 3))
-  (let ((let-vars (filter-variables vars (lambda (x) (list x x))))
-        (doc nil))
-    (if (stringp docstring)
-        (setq doc (list docstring))
-      (setq body (cons docstring body)))
-    `(defun ,name ,vars
-       ,@doc
-       (lexical-let ,let-vars
-         ,@body))))
+    (declare (indent defun)
+             (doc-string 3))
+    (let ((let-vars (filter-variables vars (lambda (x) (list x x))))
+          (doc nil))
+      (if (stringp docstring)
+          (setq doc (list docstring))
+        (setq body (cons docstring body)))
+      `(defun ,name ,vars
+         ,@doc
+         (lexical-let ,let-vars
+           ,@body)))))
 
 (defmacro helm-mpd-defaction (name vars &rest body)
   "Define a `helm-mpd' action. It defines three closures `helm-mpd-NAME',
