@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-07 00:12:57 tuemura>
+;; Time-stamp: <2016-03-07 00:14:20 tuemura>
 ;;
 ;;; Code:
 
@@ -179,7 +179,8 @@ but does not exit helm session."
                  ("y" . mpd-toggle-single)
                  (">" . mpd-next)
                  ("<" . mpd-prev)
-                 ("u" . mpd-update)))
+                 ("u" . mpd-update)
+                 ("c" . mpd-clear-playlist)))
       (define-key m (kbd (car v)) (helm-mpd-simple-mpd-action (cdr v) conn)))
     m))
 
