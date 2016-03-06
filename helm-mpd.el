@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-06 23:04:36 tuemura>
+;; Time-stamp: <2016-03-06 23:09:30 tuemura>
 ;;
 ;;; Code:
 
@@ -152,9 +152,8 @@ but does not exit helm session."
          :mpd-conn conn
          args))
 
-(defun helm-mpd-display-mode-line-ad (orig source &optional force)
+(defun helm-mpd-display-mode-line-ad (source &optional force)
   "Advice for `helm-display-mode-line'."
-  (funcall orig source force)
   (let ((conn0 (assoc 'mpd-conn source)))
     (when conn0
       (let ((conn (cdr conn0)))
@@ -162,7 +161,7 @@ but does not exit helm session."
         (when force
           (force-mode-line-update))))))
 
-(advice-add 'helm-display-mode-line :around 'helm-mpd-display-mode-line-ad)
+(advice-add 'helm-display-mode-line :after 'helm-mpd-display-mode-line-ad)
 
 (defclosure helm-mpd-simple-mpd-action (fun conn)
   "Make a simple MPD action."
