@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-06 22:55:35 tuemura>
+;; Time-stamp: <2016-03-06 23:04:36 tuemura>
 ;;
 ;;; Code:
 
@@ -154,13 +154,13 @@ but does not exit helm session."
 
 (defun helm-mpd-display-mode-line-ad (orig source &optional force)
   "Advice for `helm-display-mode-line'."
+  (funcall orig source force)
   (let ((conn0 (assoc 'mpd-conn source)))
-    (if conn0
-        (let ((conn (cdr conn0)))
-          (setq-local mode-line-format (helm-mpd-mode-line conn))
-          (when force
-            (force-mode-line-update)))
-      (funcall orig source force))))
+    (when conn0
+      (let ((conn (cdr conn0)))
+        (setq mode-line-format (helm-mpd-mode-line conn))
+        (when force
+          (force-mode-line-update))))))
 
 (advice-add 'helm-display-mode-line :around 'helm-mpd-display-mode-line-ad)
 
