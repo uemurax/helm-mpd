@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-07 03:47:26 tuemura>
+;; Time-stamp: <2016-03-07 03:55:17 tuemura>
 ;;
 ;;; Code:
 
@@ -42,14 +42,14 @@
                     helm-mpd-timeout)
     helm-mpd-inter-conn))
 
-(defun filter-variables (vars f)
-  (apply 'concatenate 'list
-         (mapcar (lambda (x)
-                   (unless (eq (aref (symbol-name x) 0) ?&)
-                     (list (funcall f x))))
-                 vars)))
-
 (eval-when-compile
+  (defun filter-variables (vars f)
+    (apply 'concatenate 'list
+           (mapcar (lambda (x)
+                     (unless (eq (aref (symbol-name x) 0) ?&)
+                       (list (funcall f x))))
+                   vars)))
+
   (defmacro defclosure (name vars &optional docstring &rest body)
     "Define a closure.
 BODY should return a `lambda' form."
@@ -63,10 +63,10 @@ BODY should return a `lambda' form."
       `(defun ,name ,vars
          ,@doc
          (lexical-let ,let-vars
-           ,@body)))))
+           ,@body))))
 
-(defmacro helm-mpd-defaction (name vars &rest body)
-  "Define a `helm-mpd' action. It defines three closures `helm-mpd-NAME',
+  (defmacro helm-mpd-defaction (name vars &rest body)
+    "Define a `helm-mpd' action. It defines three closures `helm-mpd-NAME',
 `helm-mpd-run-NAME' and `helm-mpd-run-NAME-persistent'.
 
 BODY must return a helm action.
@@ -77,32 +77,32 @@ You can bind some key to `helm-mpd-run-NAME' in helm key map.
 
 `helm-mpd-run-NAME-persistent' is similar to `helm-mpd-run-NAME'
 but does not exit helm session."
-  (declare (indent defun)
-           (doc-string 3))
-  (let* ((action (intern (format "helm-mpd-%s" name)))
-         (run-action (intern (format "helm-mpd-run-%s" name)))
-         (run-action-doc (format "Run `%s' action from helm session." action))
-         (persistent-action (intern (format "helm-mpd-run-%s-persistent" name)))
-         (persistent-action-doc (format "Run `%s' action without exiting helm session." action))
-         (vars1 (filter-variables vars 'identity)))
-    `(progn
-       (defclosure ,action ,vars
-         ,@body)
-       (defclosure ,run-action ,vars
-         ,run-action-doc
-         (lambda ()
-           (interactive)
-           (with-helm-alive-p
-             (helm-exit-and-execute-action (,action ,@vars1)))))
-       (defclosure ,persistent-action ,vars
-         ,persistent-action-doc
-         (lambda ()
-           (interactive)
-           (with-helm-alive-p
-             (helm-attrset 'mpd-persistent-action (cons (,action ,@vars1) 'never-split))
-             (helm-execute-persistent-action 'mpd-persistent-action)
-             (message nil)
-             (helm-force-update)))))))
+    (declare (indent defun)
+             (doc-string 3))
+    (let* ((action (intern (format "helm-mpd-%s" name)))
+           (run-action (intern (format "helm-mpd-run-%s" name)))
+           (run-action-doc (format "Run `%s' action from helm session." action))
+           (persistent-action (intern (format "helm-mpd-run-%s-persistent" name)))
+           (persistent-action-doc (format "Run `%s' action without exiting helm session." action))
+           (vars1 (filter-variables vars 'identity)))
+      `(progn
+         (defclosure ,action ,vars
+           ,@body)
+         (defclosure ,run-action ,vars
+           ,run-action-doc
+           (lambda ()
+             (interactive)
+             (with-helm-alive-p
+               (helm-exit-and-execute-action (,action ,@vars1)))))
+         (defclosure ,persistent-action ,vars
+           ,persistent-action-doc
+           (lambda ()
+             (interactive)
+             (with-helm-alive-p
+               (helm-attrset 'mpd-persistent-action (cons (,action ,@vars1) 'never-split))
+               (helm-execute-persistent-action 'mpd-persistent-action)
+               (message nil)
+               (helm-force-update))))))))
 
 ;; ----------------------------------------------------------------
 ;; Common
