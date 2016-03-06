@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-06 23:09:30 tuemura>
+;; Time-stamp: <2016-03-07 00:07:40 tuemura>
 ;;
 ;;; Code:
 
@@ -134,15 +134,15 @@ but does not exit helm session."
                     ((play) "Playing")
                     ((pause) "Paused")
                     ((stop) "Stopped"))
-                    ": "
-                    (funcall helm-mpd-song-format song)
-                    " [" (helm-mpd-format-time (getf status 'time-elapsed))
-                    "/" (helm-mpd-format-time (getf status 'time-total))
-                    "]"
-                    " [" (when (> (getf status 'repeat) 0) "r")
-                    (when (> (getf status 'random) 0) "z")
-                    (when (> (string-to-int (getf status 'single)) 0) "s")
-                    "]"))))
+                  ": "
+                  (funcall helm-mpd-song-format song)
+                  " [" (helm-mpd-format-time (getf status 'time-elapsed))
+                  "/" (helm-mpd-format-time (getf status 'time-total))
+                  "]"
+                  " [" (when (> (getf status 'repeat) 0) "r")
+                  (when (> (getf status 'random) 0) "z")
+                  (when (> (string-to-int (getf status 'single)) 0) "s")
+                  "]"))))
 
 (defclass helm-mpd-source (helm-source-sync)
   ((mpd-conn :initarg :mpd-conn)))
@@ -214,11 +214,12 @@ but does not exit helm session."
 
 (defcustom helm-mpd-song-format
   (lambda (song)
-    (concat (propertize (getf song 'Artist) 'face 'helm-mpd-artist-face)
-            " "
-            (propertize (getf song 'Title) 'face 'helm-mpd-title-face)
-            " "
-            (propertize (getf song 'Album) 'face 'helm-mpd-album-face)))
+    (mapconcat (lambda (x)
+                 (propertize (or (getf song (car x)) "") 'face (cdr x)))
+               '((Artist . helm-mpd-artist-face)
+                 (Title . helm-mpd-title-face)
+                 (Album . helm-mpd-album-face))
+               " "))
   "Function to format a song."
   :group 'helm-mpd
   :type 'function)
