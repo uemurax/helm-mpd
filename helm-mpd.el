@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-07 03:55:17 tuemura>
+;; Time-stamp: <2016-03-17 04:35:24 tuemura>
 ;;
 ;;; Code:
 
@@ -15,32 +15,17 @@
   "Predefined configurations for `helm-mpd.el'."
   :group 'helm)
 
-(defcustom helm-mpd-host "localhost"
-  "Default host for `helm-mpd'."
-  :group 'helm-mpd
-  :type 'string)
-
-(defcustom helm-mpd-port 6600
-  "Default port for `helm-mpd'."
-  :group 'helm-mpd
-  :type 'integer)
-
-(defcustom helm-mpd-timeout 10
-  "Default timeout for `helm-mpd'."
-  :group 'helm-mpd
-  :type 'integer)
-
-(defvar helm-mpd-inter-conn (mpd-conn-new helm-mpd-host helm-mpd-port helm-mpd-timeout)
-  "Default MPD connection for `helm-mpd'.")
-
 (defun helm-mpd-read-host-and-port ()
   "Read MPD host and port, and return a MPD connection."
   (if current-prefix-arg
-      (mpd-conn-new (read-string (format "Host (default: %s): " helm-mpd-host)
-                                 nil nil helm-mpd-host)
-                    (read-number "Port: " helm-mpd-port)
-                    helm-mpd-timeout)
-    helm-mpd-inter-conn))
+      (let ((host (car mpd-interactive-connection-parameters))
+            (port (cadr mpd-interactive-connection-parameters))
+            (args (cddr mpd-interactive-connection-parameters)))
+        (mpd-conn-new (read-string (format "Host (default: %s): " host)
+                                   nil nil host)
+                      (read-number "Port: " port)
+                      helm-mpd-timeout))
+    mpd-inter-conn))
 
 (eval-when-compile
   (defun filter-variables (vars f)
