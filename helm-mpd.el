@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-20 19:04:17 tuemura>
+;; Time-stamp: <2016-03-20 19:46:54 tuemura>
 ;;
 ;;; Code:
 
@@ -601,10 +601,11 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
 
 (defun helm-mpd-library-build-source (&optional name &rest args)
   (setq name (or name "Library"))
-  (helm-make-source name 'helm-source-mpd-songs
-    :candidates 'helm-mpd-library-candidates
-    :init 'helm-mpd-library-retrieve
-    :action 'helm-mpd-library-actions))
+  (apply #'helm-make-source name 'helm-source-mpd-songs
+         :candidates 'helm-mpd-library-candidates
+         :init 'helm-mpd-library-retrieve
+         :action 'helm-mpd-library-actions
+         args))
 
 ;;;###autoload
 (defun helm-mpd-library (host port)
@@ -617,80 +618,109 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
 ;; Play lists
 ;; ----------------------------------------------------------------
 
-(defclosure helm-mpd-playlist-candidates (conn)
-  "Get all playlists."
-  (lambda ()
-    (let ((ls nil))
-      (mpd-get-directory-info conn nil
-                              (lambda (obj type)
-                                (when (eq type 'playlist)
-                                  (push obj ls))))
-      ls)))
+(defvar helm-mpd-playlist-candidates nil)
 
-(defclosure helm-mpd-save-playlist (conn)
-  "Save the current playlist."
-  (lambda (pname)
-    (mpd-save-playlist conn pname)
-    (message "Save the current playlist as %s" pname)))
+(defun helm-mpd-playlist-retrieve (&optional host port)
+  (setq host (or host helm-mpd-host)
+        port (or port helm-mpd-port))
+  (helm-mpdlib-send host port
+                    (helm-mpdlib-make-command 'listplaylists)
+                    (lambda ()
+                      (while (helm-mpdlib-received-p)
+                        (setq helm-mpd-playlist-candidates
+                              (cl-loop for x in (helm-mpdlib-read-objects '(playlist))
+                                       when (assq 'playlist x)
+                                       collect x))))))
 
-(defclosure helm-mpd-load-playlists (conn)
-  "Load selected playlists."
-  (lambda (_ignore)
-    (let ((playlists (helm-marked-candidates)))
-      (mpd-load-playlist conn playlists)
-      (message "Load playlists %s" playlists))))
+(defun helm-mpd-playlist-names (playlists)
+  (apply #'append
+         (mapcar (lambda (x)
+                   (when (assq 'playlist x)
+                     (list (cdr (assq 'playlist x)))))
+                 playlists)))
 
-(helm-mpd-defaction remove-playlists (conn)
-  "Remove selected playlists."
-  (lambda (_ignore)
-    (let ((playlists (helm-marked-candidates)))
-      (mpd-remove-playlist conn playlists)
-      (message "Remove playlists %s" playlists))))
+(defun helm-mpd-playlist-load (playlists)
+  (helm-mpd-send (mapcar (lambda (n)
+                           (helm-mpdlib-make-command 'load n))
+                         (helm-mpd-playlist-names playlists))
+                 nil))
 
-(defun helm-mpd-new-playlist-actions (conn)
-  "Actions for new playlists."
+(defun helm-mpd-playlist-remove (playlists)
+  (helm-mpd-send (mapcar (lambda (n)
+                           (helm-mpdlib-make-command 'rm n))
+                         (helm-mpd-playlist-names playlists))
+                 nil))
+
+(defun helm-mpd-playlist-rename (playlist)
+  (let ((x (assq 'playlist playlist)))
+    (when x
+      (let ((name (completing-read "Rename to: "
+                                   (mapcar (lambda (c)
+                                             (cdr (assq 'playlist c)))
+                                           helm-mpd-playlist-candidates))))
+        (helm-mpd-send (helm-mpdlib-make-command 'rename (cdr x) name)
+                       nil)))))
+
+(defvar helm-mpd-playlist-actions
   (helm-make-actions
-   "Save current playlist to file" (helm-mpd-save-playlist conn)))
+   "Load playlist(s)" (helm-mpd-action 'helm-mpd-playlist-load t)
+   "Remove playlist(s)" (helm-mpd-action 'helm-mpd-playlist-remove t)
+   "Rename playlist" (helm-mpd-action 'helm-mpd-playlist-rename))
+  "Actions for `helm-mpd-playlist'.")
 
-(defun helm-mpd-playlist-actions (conn)
-  "Actions for existing playlists."
-  (helm-make-actions
-   "Load playlist(s)" (helm-mpd-load-playlists conn)
-   "Remove playlist(s)" (helm-mpd-remove-playlists conn)))
-
-(defun helm-mpd-playlist-map (conn)
-  "Keymap in `helm-mpd-playlist'."
+(defvar helm-mpd-playlist-map
   (let ((m (make-sparse-keymap)))
-    (set-keymap-parent m (helm-mpd-map conn))
-    (dolist (v `(("M-D" . ,(helm-mpd-run-remove-playlists conn))
-                 ("C-c d" . ,(helm-mpd-run-remove-playlists-persistent conn))))
+    (set-keymap-parent m helm-map)
+    (dolist (v `(("M-D" . ,(helm-mpd-action 'helm-mpd-playlist-remove t t))
+                 ("C-c d" . ,(helm-mpd-action 'helm-mpd-playlist-remove t 'persistent))
+                 ("M-R" . ,(helm-mpd-action 'helm-mpd-playlist-rename t t))))
       (define-key m (kbd (car v)) (cdr v)))
-    m))
+    m)
+  "Keymap for `helm-mpd-playlist'.")
 
-(defun helm-mpd-build-existing-playlist-source (conn)
-  "Build sources for existing playlists."
-  (helm-mpd-build-mpd-source conn "Playlists"
-                             :candidates (helm-mpd-playlist-candidates conn)
-                             :action (helm-mpd-playlist-actions conn)
-                             :keymap (helm-mpd-playlist-map conn)))
-
-(defun helm-mpd-build-new-playlist-source (conn)
-  "Build sources for new playlists."
-  (helm-build-dummy-source "Create playlist"
-    :action (helm-mpd-new-playlist-actions conn)
-    :keymap (helm-mpd-map conn)))
-
-(defun helm-mpd-build-playlist-source (conn)
-  "Build sources for `helm-mpd-playlist'."
-  (list (helm-mpd-build-existing-playlist-source conn)
-        (helm-mpd-build-new-playlist-source conn)))
+(defun helm-mpd-playlist-build-source (&optional name &rest args)
+  (setq name (or name "Playlists"))
+  (apply #'helm-make-source name 'helm-source
+         :real-to-display (lambda (c)
+                            (cdr (assq 'playlist c)))
+         :candidates 'helm-mpd-playlist-candidates
+         :init 'helm-mpd-playlist-retrieve
+         :action 'helm-mpd-playlist-actions
+         :keymap helm-mpd-playlist-map
+         args))
 
 ;;;###autoload
-(defun helm-mpd-playlist (conn)
+(defun helm-mpd-playlist (host port)
   "Helm for MPD playlists."
-  (interactive (list (helm-mpd-read-host-and-port)))
-  (helm :sources (helm-mpd-build-playlist-source conn)
-        :buffer "*helm-mpd-playlist*"))
+  (interactive (helm-mpd-interactive-host-and-port))
+  (let ((helm-mpd-host host)
+        (helm-mpd-port port))
+    (helm :sources (helm-mpd-playlist-build-source)
+          :buffer "*helm-mpd-playlist*")))
+
+(defun helm-mpd-new-playlist-save (name)
+  (helm-mpd-send (helm-mpdlib-make-command 'save name)
+                 nil))
+
+(defvar helm-mpd-new-playlist-actions
+  (helm-make-actions
+   "Save the current playlist" (helm-mpd-action 'helm-mpd-new-playlist-save))
+  "Actions for `helm-mpd-new-playlist'.")
+
+(defun helm-mpd-new-playlist-build-source (&optional name &rest args)
+  (setq name (or name "Create playlist"))
+  (apply #'helm-make-source name 'helm-source-dummy
+         :action 'helm-mpd-new-playlist-actions
+         args))
+
+;;;###autoload
+(defun helm-mpd-new-playlist (host port)
+  "Helm for new MPD playlist."
+  (interactive (helm-mpd-interactive-host-and-port))
+  (let ((helm-mpd-host host)
+        (helm-mpd-port port))
+    (helm :sources (helm-mpd-new-playlist-build-source)
+          :buffer "*helm-mpd-new-playlist*")))
 
 ;; ----------------------------------------------------------------
 ;; Put together
