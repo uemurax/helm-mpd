@@ -4,7 +4,6 @@
 [[https://github.com/emacs-helm/helm][Helm]] interface for [[http://www.musicpd.org/][MPD]].
 
 * Dependencies
-- [[https://github.com/andyetitmoves/libmpdee][libmpdee]] :: An Emacs lisp client library for mpd.
 - [[https://github.com/emacs-helm/helm][Helm]] :: Emacs incremental completion and selection narrowing framework.
 
 * Usage
