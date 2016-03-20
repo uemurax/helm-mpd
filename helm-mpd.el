@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-20 19:51:26 tuemura>
+;; Time-stamp: <2016-03-20 19:52:38 tuemura>
 ;;
 ;;; Code:
 
@@ -611,8 +611,10 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
 (defun helm-mpd-library (host port)
   "Helm for MPD library."
   (interactive (helm-mpd-interactive-host-and-port))
-  (helm :sources (helm-mpd-library-build-source)
-        :buffer "*helm-mpd-library*"))
+  (let ((helm-mpd-host host)
+        (helm-mpd-port port))
+    (helm :sources (helm-mpd-library-build-source)
+          :buffer "*helm-mpd-library*")))
 
 ;; ----------------------------------------------------------------
 ;; Play lists
