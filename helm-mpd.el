@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-20 20:00:20 tuemura>
+;; Time-stamp: <2016-03-20 20:07:07 tuemura>
 ;;
 ;;; Code:
 
@@ -269,8 +269,18 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
 
 (defvar helm-mpd-library-actions
   (helm-make-actions
-   "Enqueue song(s)" (helm-mpd-action 'helm-mpd-songs-enqueue t))
+   "Enqueue song(s)" (helm-mpd-action 'helm-mpd-songs-enqueue t)
+   "Show raw data(s)" (helm-mpd-action 'helm-mpd-show-raw-data t))
   "Actions for `helm-mpd-library'.")
+
+(defvar helm-mpd-library-map
+  (let ((m (make-sparse-keymap)))
+    (set-keymap-parent m helm-map)
+    (dolist (v `(("C-c RET" . ,(helm-mpd-action 'helm-mpd-show-raw-data t t))
+                 ("C-c C-j" . ,(helm-mpd-action 'helm-mpd-show-raw-data t 'persistent))))
+      (define-key m (kbd (car v)) (cdr v)))
+    m)
+  "Keymap for `helm-mpd-library'.")
 
 (defun helm-mpd-library-build-source (&optional name &rest args)
   (setq name (or name "Library"))
@@ -278,6 +288,7 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
          :candidates 'helm-mpd-library-candidates
          :init 'helm-mpd-library-retrieve
          :action 'helm-mpd-library-actions
+         :keymap helm-mpd-library-map
          args))
 
 ;;;###autoload
@@ -340,7 +351,8 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
   (helm-make-actions
    "Load playlist(s)" (helm-mpd-action 'helm-mpd-playlist-load t)
    "Remove playlist(s)" (helm-mpd-action 'helm-mpd-playlist-remove t)
-   "Rename playlist" (helm-mpd-action 'helm-mpd-playlist-rename))
+   "Rename playlist" (helm-mpd-action 'helm-mpd-playlist-rename)
+   "Show raw data(s)" (helm-mpd-action 'helm-mpd-show-raw-data t))
   "Actions for `helm-mpd-playlist'.")
 
 (defvar helm-mpd-playlist-map
@@ -348,7 +360,9 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
     (set-keymap-parent m helm-map)
     (dolist (v `(("M-D" . ,(helm-mpd-action 'helm-mpd-playlist-remove t t))
                  ("C-c d" . ,(helm-mpd-action 'helm-mpd-playlist-remove t 'persistent))
-                 ("M-R" . ,(helm-mpd-action 'helm-mpd-playlist-rename t t))))
+                 ("M-R" . ,(helm-mpd-action 'helm-mpd-playlist-rename t t))
+                 ("C-c RET" . ,(helm-mpd-action 'helm-mpd-show-raw-data t t))
+                 ("C-c C-j" . ,(helm-mpd-action 'helm-mpd-show-raw-data t 'persistent))))
       (define-key m (kbd (car v)) (cdr v)))
     m)
   "Keymap for `helm-mpd-playlist'.")
