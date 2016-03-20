@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-20 22:35:11 tuemura>
+;; Time-stamp: <2016-03-21 02:24:00 tuemura>
 ;;
 ;;; Code:
 
@@ -165,7 +165,8 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
 ;; Current playlist
 ;; ----------------------------------------------------------------
 
-(defvar helm-mpd-current-playlist-candidates nil)
+(defvar helm-mpd-current-playlist-candidates (cons nil nil))
+(defvar helm-mpd-current-playlist-source nil)
 
 (defun helm-mpd-current-playlist-retrieve ()
   "Retrieve the current playlist."
@@ -174,9 +175,9 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
                    (lambda ()
                      (while (helm-mpdlib-received-p)
                        (setq helm-mpd-current-playlist-candidates
-                             (helm-mpdlib-read-objects '(file))))
-                     (when (helm-alive-p)
-                       (helm-update)))
+                             (cons t (helm-mpdlib-read-objects '(file)))))
+                     (with-helm-buffer
+                       (helm-update nil helm-mpd-current-playlist-source)))
                    nil :output-buffer buf)))
 
 (defun helm-mpd-current-playlist-play (song)
@@ -231,27 +232,32 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
 (defun helm-mpd-current-playlist-build-source (&optional name &rest args)
   (setq name (or name "Current playlist"))
   (apply #'helm-make-source name 'helm-source-mpd-songs
-    :candidates 'helm-mpd-current-playlist-candidates
-    :init 'helm-mpd-current-playlist-retrieve
-    :action 'helm-mpd-current-playlist-actions
-    :keymap helm-mpd-current-playlist-map
-    args))
+         :candidates (lambda ()
+                       (if (car helm-mpd-current-playlist-candidates)
+                           (setcar helm-mpd-current-playlist-candidates nil)
+                         (helm-mpd-current-playlist-retrieve))
+                       (cdr helm-mpd-current-playlist-candidates))
+         :action 'helm-mpd-current-playlist-actions
+         :keymap helm-mpd-current-playlist-map
+         args))
 
 ;;;###autoload
 (defun helm-mpd-current-playlist (host port)
   "Helm for current playlist."
   (interactive (helm-mpd-interactive-host-and-port))
   (let ((helm-mpd-host host)
-        (helm-mpd-port port))
-    (helm :sources (helm-mpd-current-playlist-build-source)
-          :buffer "*helm-mpd-current-playlist*")))
+        (helm-mpd-port port)
+        (src (helm-mpd-current-playlist-build-source)))
+    (helm :sources (list src)
+          :buffer "*helm-mpd-current-playlist*"
+          :mpd-current-playlist-source src)))
 
 ;; ----------------------------------------------------------------
 ;; Libraries
 ;; ----------------------------------------------------------------
 
-(defvar helm-mpd-library-candidates nil)
-
+(defvar helm-mpd-library-candidates (cons nil nil))
+(defvar helm-mpd-library-source nil)
 (defun helm-mpd-library-retrieve ()
   "Retrieve the library."
   (let ((buf "*helm-mpd-library-output*"))
@@ -259,9 +265,12 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
                    (lambda ()
                      (while (helm-mpdlib-received-p)
                        (setq helm-mpd-library-candidates
-                             (cl-loop for x in (helm-mpdlib-read-objects '(file directory playlist))
-                                      when (assq 'file x)
-                                      collect x))))
+                             (cons t
+                                   (cl-loop for x in (helm-mpdlib-read-objects '(file directory playlist))
+                                            when (assq 'file x)
+                                            collect x))))
+                     (with-helm-buffer
+                       (helm-update nil helm-mpd-library-source)))
                    nil :output-buffer buf)))
 
 (defvar helm-mpd-library-actions
@@ -282,8 +291,11 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
 (defun helm-mpd-library-build-source (&optional name &rest args)
   (setq name (or name "Library"))
   (apply #'helm-make-source name 'helm-source-mpd-songs
-         :candidates 'helm-mpd-library-candidates
-         :init 'helm-mpd-library-retrieve
+         :candidates (lambda ()
+                       (if (car helm-mpd-library-candidates)
+                           (setcar helm-mpd-library-candidates nil)
+                         (helm-mpd-library-retrieve))
+                       (cdr helm-mpd-library-candidates))
          :action 'helm-mpd-library-actions
          :keymap helm-mpd-library-map
          args))
@@ -293,15 +305,18 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
   "Helm for MPD library."
   (interactive (helm-mpd-interactive-host-and-port))
   (let ((helm-mpd-host host)
-        (helm-mpd-port port))
-    (helm :sources (helm-mpd-library-build-source)
-          :buffer "*helm-mpd-library*")))
+        (helm-mpd-port port)
+        (src (helm-mpd-library-build-source)))
+    (helm :sources (list src)
+          :buffer "*helm-mpd-library*"
+          :mpd-library-source src)))
 
 ;; ----------------------------------------------------------------
 ;; Play lists
 ;; ----------------------------------------------------------------
 
-(defvar helm-mpd-playlist-candidates nil)
+(defvar helm-mpd-playlist-candidates (cons nil nil))
+(defvar helm-mpd-playlist-source nil)
 
 (defun helm-mpd-playlist-retrieve ()
   (let ((buf "*helm-mpd-playlist-output*"))
@@ -309,9 +324,12 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
                    (lambda ()
                      (while (helm-mpdlib-received-p)
                        (setq helm-mpd-playlist-candidates
-                             (cl-loop for x in (helm-mpdlib-read-objects '(playlist))
-                                      when (assq 'playlist x)
-                                      collect x))))
+                             (cons t
+                                   (cl-loop for x in (helm-mpdlib-read-objects '(playlist))
+                                            when (assq 'playlist x)
+                                            collect x))))
+                     (with-helm-buffer
+                       (helm-update nil helm-mpd-playlist-source)))
                    nil :output-buffer buf)))
 
 (defun helm-mpd-playlist-names (playlists)
@@ -365,8 +383,11 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
   (apply #'helm-make-source name 'helm-source
          :real-to-display (lambda (c)
                             (cdr (assq 'playlist c)))
-         :candidates 'helm-mpd-playlist-candidates
-         :init 'helm-mpd-playlist-retrieve
+         :candidates (lambda ()
+                       (if (car helm-mpd-playlist-candidates)
+                           (setcar helm-mpd-playlist-candidates nil)
+                         (helm-mpd-playlist-retrieve))
+                       (cdr helm-mpd-playlist-candidates))
          :action 'helm-mpd-playlist-actions
          :keymap helm-mpd-playlist-map
          args))
@@ -376,9 +397,11 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
   "Helm for MPD playlists."
   (interactive (helm-mpd-interactive-host-and-port))
   (let ((helm-mpd-host host)
-        (helm-mpd-port port))
-    (helm :sources (helm-mpd-playlist-build-source)
-          :buffer "*helm-mpd-playlist*")))
+        (helm-mpd-port port)
+        (src (helm-mpd-playlist-build-source)))
+    (helm :sources (list src)
+          :buffer "*helm-mpd-playlist*"
+          :mpd-playlist-source src)))
 
 (defun helm-mpd-new-playlist-save (name)
   (helm-mpd-send (helm-mpdlib-make-command 'save name)))
@@ -415,12 +438,18 @@ This is a mixture of `helm-mpd-current-playlist', `helm-mpd-library',
 `helm-mpd-playlist' and `helm-mpd-new-playlist'."
   (interactive (helm-mpd-interactive-host-and-port))
   (let ((helm-mpd-host host)
-        (helm-mpd-port port))
-    (helm :sources (list (helm-mpd-current-playlist-build-source)
-                         (helm-mpd-library-build-source)
-                         (helm-mpd-playlist-build-source)
+        (helm-mpd-port port)
+        (cur-pl-src (helm-mpd-current-playlist-build-source))
+        (lib-src (helm-mpd-library-build-source))
+        (pl-src (helm-mpd-playlist-build-source)))
+    (helm :sources (list cur-pl-src
+                         lib-src
+                         pl-src
                          (helm-mpd-new-playlist-build-source))
-          :buffer "*helm-mpd*")))
+          :buffer "*helm-mpd*"
+          :mpd-current-playlist-source cur-pl-src
+          :mpd-library-source lib-src
+          :mpd-playlist-source pl-src)))
 
 (provide 'helm-mpd)
 
