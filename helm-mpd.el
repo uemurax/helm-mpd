@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-21 02:24:00 tuemura>
+;; Time-stamp: <2016-03-21 02:38:33 tuemura>
 ;;
 ;;; Code:
 
@@ -65,8 +65,7 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
          (interactive)
          (with-helm-alive-p
            (helm-attrset 'mpd-persistent-action (cons g 'never-split))
-           (helm-execute-persistent-action 'mpd-persistent-action)
-           (helm-force-update))))
+           (helm-execute-persistent-action 'mpd-persistent-action))))
       (otherwise
        (lambda ()
          (interactive)
@@ -358,9 +357,29 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
                                            helm-mpd-playlist-candidates))))
         (helm-mpd-send (helm-mpdlib-make-command 'rename (cdr x) name))))))
 
+(defun helm-mpd-playlist-info (playlists)
+  (let ((buf "*helm-mpd-playlist-info*"))
+    (switch-to-buffer buf)
+    (erase-buffer)
+    (helm-mpd-send (mapcar (lambda (n)
+                             (helm-mpdlib-make-command 'listplaylistinfo n))
+                           (helm-mpd-playlist-names playlists))
+                   #'ignore nil :output-buffer buf)))
+
+(defun helm-mpd-playlist-list (playlists)
+  (let ((buf "*helm-mpd-playlist-list*"))
+    (switch-to-buffer buf)
+    (erase-buffer)
+    (helm-mpd-send (mapcar (lambda (n)
+                             (helm-mpdlib-make-command 'listplaylist n))
+                           (helm-mpd-playlist-names playlists))
+                   #'ignore nil :output-buffer buf)))
+
 (defvar helm-mpd-playlist-actions
   (helm-make-actions
    "Load playlist(s)" (helm-mpd-action 'helm-mpd-playlist-load t)
+   "List playlist(s)" (helm-mpd-action 'helm-mpd-playlist-list t)
+   "Show playlist(s) info" (helm-mpd-action 'helm-mpd-playlist-info t)
    "Remove playlist(s)" (helm-mpd-action 'helm-mpd-playlist-remove t)
    "Rename playlist" (helm-mpd-action 'helm-mpd-playlist-rename)
    "Show raw data(s)" (helm-mpd-action 'helm-mpd-show-raw-data t))
@@ -371,6 +390,10 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
     (set-keymap-parent m helm-map)
     (dolist (v `(("M-D" . ,(helm-mpd-action 'helm-mpd-playlist-remove t t))
                  ("C-c d" . ,(helm-mpd-action 'helm-mpd-playlist-remove t 'persistent))
+                 ("M-L" . ,(helm-mpd-action 'helm-mpd-playlist-list t t))
+                 ("C-c l" . ,(helm-mpd-action 'helm-mpd-playlist-list t 'persistent))
+                 ("M-I" . ,(helm-mpd-action 'helm-mpd-playlist-info t t))
+                 ("C-c i" . ,(helm-mpd-action 'helm-mpd-playlist-info t 'persistent))
                  ("M-R" . ,(helm-mpd-action 'helm-mpd-playlist-rename t t))
                  ("C-c RET" . ,(helm-mpd-action 'helm-mpd-show-raw-data t t))
                  ("C-c C-j" . ,(helm-mpd-action 'helm-mpd-show-raw-data t 'persistent))))
