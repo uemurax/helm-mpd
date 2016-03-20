@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-20 15:03:43 tuemura>
+;; Time-stamp: <2016-03-20 15:51:18 tuemura>
 ;;
 ;;; Code:
 
@@ -102,6 +102,12 @@ with the current buffer containing the response."
              (setq out (cons (list x) out)))
             ((consp out)
              (setcar out (cons x (car out))))))))
+
+(defun helm-mpdlib-read-objects (separators)
+  "Read objects separated by SEPARATORS."
+  (let ((res (helm-mpdlib-read-response)))
+    (when (eq (cdr (assq :status res)) :ok)
+      (helm-mpdlib-split (cdr (assq :data res)) separators))))
 
 (provide 'helm-mpdlib)
 

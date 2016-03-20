@@ -4,16 +4,37 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-17 04:35:24 tuemura>
+;; Time-stamp: <2016-03-20 16:03:55 tuemura>
 ;;
 ;;; Code:
 
 (require 'helm)
+(require 'helm-mpdlib)
 (require 'libmpdee)
 
 (defgroup helm-mpd nil
   "Predefined configurations for `helm-mpd.el'."
   :group 'helm)
+
+(defcustom helm-mpd-host "localhost"
+  "Default host for `helm-mpd'."
+  :group 'helm-mpd
+  :type 'string)
+
+(defcustom helm-mpd-port 6600
+  "Default port for `helm-mpd'."
+  :group 'helm-mpd
+  :type 'integer)
+
+(defun helm-mpd-interactive-host-and-port ()
+  "Read host and port.
+
+If the current prefix argument is non-nil, read them from input.
+Otherwise returns `helm-mpd-host' and `helm-mpd-port'."
+  (if current-prefix-arg
+      (list (read-string "Host: " nil nil helm-mpd-host)
+            (read-number "Port: " helm-mpd-port))
+    (list helm-mpd-host helm-mpd-port)))
 
 (defun helm-mpd-read-host-and-port ()
   "Read MPD host and port, and return a MPD connection."
@@ -202,7 +223,7 @@ but does not exit helm session."
 (defcustom helm-mpd-song-format
   (lambda (song)
     (mapconcat (lambda (x)
-                 (propertize (or (plist-get song (car x)) "") 'face (cdr x)))
+                 (propertize (or (cdr (assq (car x) song)) "") 'face (cdr x)))
                '((Artist . helm-mpd-artist-face)
                  (Title . helm-mpd-title-face)
                  (Album . helm-mpd-album-face))
@@ -377,20 +398,35 @@ but does not exit helm session."
   (lambda ()
     (helm-mpd-format-songs (mpd-get-playlist-entry conn))))
 
-(defun helm-mpd-build-current-playlist-source (conn)
-  "Build sources for `helm-mpd-current-playlist'."
-  (helm-mpd-build-mpd-source conn "Current playlist"
-                             :candidates (helm-mpd-current-playlist-candidates conn)
-                             :action (helm-mpd-current-playlist-actions conn)
-                             :keymap (helm-mpd-current-playlist-map conn)
-                             :migemo t))
+(defvar helm-mpd-current-playlist-candidates nil)
+
+(defun helm-mpd-current-playlist-retrieve (&optional host port)
+  "Retrieve the current playlist."
+  (setq host (or host helm-mpd-host)
+        port (or port helm-mpd-port))
+  (helm-mpdlib-send host port
+                    (helm-mpdlib-make-command 'playlistinfo)
+                    (lambda ()
+                      (while (helm-mpdlib-received-p)
+                        (setq helm-mpd-current-playlist-candidates
+                              (helm-mpd-format-songs (helm-mpdlib-read-objects '(file)))))
+                      (helm-update))))
+
+(defun helm-mpd-current-playlist-build-source (&optional name &rest args)
+  (setq name (or name "Current playlist"))
+  (apply #'helm-make-source name 'helm-source
+    :candidates 'helm-mpd-current-playlist-candidates
+    :init 'helm-mpd-current-playlist-retrieve
+    args))
 
 ;;;###autoload
-(defun helm-mpd-current-playlist (conn)
-  "Helm for current MPD playlist."
-  (interactive (list (helm-mpd-read-host-and-port)))
-  (helm :sources (helm-mpd-build-current-playlist-source conn)
-        :buffer "*helm-mpd-current-playlist*"))
+(defun helm-mpd-current-playlist (host port)
+  "Helm for current playlist."
+  (interactive (helm-mpd-interactive-host-and-port))
+  (let ((helm-mpd-host host)
+        (helm-mpd-port port))
+    (helm :sources (helm-mpd-current-playlist-build-source)
+          :buffer "*helm-mpd-current-playlist*")))
 
 ;; ----------------------------------------------------------------
 ;; Libraries
