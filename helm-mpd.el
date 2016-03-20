@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-20 17:09:16 tuemura>
+;; Time-stamp: <2016-03-20 18:38:55 tuemura>
 ;;
 ;;; Code:
 
@@ -47,6 +47,11 @@ Otherwise returns `helm-mpd-host' and `helm-mpd-port'."
                       (read-number "Port: " port)
                       helm-mpd-timeout))
     mpd-inter-conn))
+
+(defun helm-mpd-send (str callback &optional cbarg)
+  "Run `helm-mpdlib-send' with `helm-mpd-host' and `helm-mpd-port'."
+  (helm-mpdlib-send helm-mpd-host helm-mpd-port
+                    str callback cbarg))
 
 (eval-when-compile
   (defun filter-variables (vars f)
@@ -398,6 +403,43 @@ but does not exit helm session."
   (lambda ()
     (helm-mpd-format-songs (mpd-get-playlist-entry conn))))
 
+(defun helm-mpd-show-raw-data (candidates)
+  (switch-to-buffer "*helm-mpd-raw-data*")
+  (erase-buffer)
+  (dolist (c candidates)
+    (insert (format "%S" c) "\n")))
+
+(defun helm-mpd-action (fun &optional on-marked command)
+  "Make a helm action.
+
+FUN must be a function with one parameter.
+
+If ON-MARKED is nil, call FUN with the selected candidate.
+If ON-MRAKED is non-nil, call FUN with the list of the marked candidates.
+
+If COMMAND is non-nil, make an interactive function
+which is called in a helm session.
+If COMMAND is the simbol `persistent', the function does not exit helm session."
+  (lexical-let* ((fun fun)
+                 (g (if on-marked
+                        (lambda (_ignore)
+                          (funcall fun (helm-marked-candidates)))
+                      fun)))
+    (case command
+      ((nil) g)
+      ((persistent)
+       (lambda ()
+         (interactive)
+         (with-helm-alive-p
+           (helm-attrset 'mpd-persistent-action (cons g 'never-split))
+           (helm-execute-persistent-action 'mpd-persistent-action)
+           (helm-force-update))))
+      (otherwise
+       (lambda ()
+         (interactive)
+         (with-helm-alive-p
+           (helm-exit-and-execute-action g)))))))
+
 (defun helm-mpd-song--match-pattern (p song)
   (let ((mfn (if helm-migemo-mode
                  #'helm-mm-migemo-string-match
@@ -450,14 +492,67 @@ but does not exit helm session."
                     (lambda ()
                       (while (helm-mpdlib-received-p)
                         (setq helm-mpd-current-playlist-candidates
-                              (helm-mpdlib-read-objects '(file))))
-                      (helm-update))))
+                              (helm-mpdlib-read-objects '(file)))))))
+
+(defun helm-mpd-current-playlist-play (song)
+  (let ((pos (cdr (assq 'Pos song))))
+    (when pos
+      (helm-mpd-send (helm-mpdlib-make-command 'play pos)
+                     nil))))
+
+(defun helm-mpd-current-playlist-delete (songs)
+  (let ((poss (apply #'append
+                     (mapcar (lambda (song)
+                               (let ((p (assq 'Pos song)))
+                                 (when p
+                                   (list (string-to-number (cdr p))))))
+                             songs))))
+    (helm-mpd-send (mapcar (lambda (pos)
+                             (helm-mpdlib-make-command 'delete pos))
+                           (seq-uniq (seq-sort '> poss)))
+                   nil)))
+
+(defun helm-mpd-current-playlist-move (n)
+  (interactive (list (if current-prefix-arg
+                         (cond ((listp current-prefix-arg)
+                                (car current-prefix-arg))
+                               (t current-prefix-arg))
+                       (read-number "Move to: "))))
+  (with-helm-alive-p
+    (let ((c (helm-get-selection)))
+      (when c
+        (let ((pos (cdr (assq 'Pos c))))
+          (when pos
+            (helm-mpd-send (helm-mpdlib-make-command 'move pos n)
+                           nil)))))))
+(put 'helm-mpd-current-playlist-move 'helm-only t)
+
+(defvar helm-mpd-current-playlist-actions
+  (helm-make-actions
+   "Play song" (helm-mpd-action 'helm-mpd-current-playlist-play)
+   "Delete song(s)" (helm-mpd-action 'helm-mpd-current-playlist-delete t)
+   "Show raw data(s)" (helm-mpd-action 'helm-mpd-show-raw-data t))
+  "Actions for `helm-mpd-current-playlist'.")
+
+(defvar helm-mpd-current-playlist-map
+  (let ((m (make-sparse-keymap)))
+    (set-keymap-parent m helm-map)
+    (dolist (v `(("M-D" . ,(helm-mpd-action 'helm-mpd-current-playlist-delete t t))
+                 ("C-c d" . ,(helm-mpd-action 'helm-mpd-current-playlist-delete t 'persistent))
+                 ("C-c RET" . ,(helm-mpd-action 'helm-mpd-show-raw-data t t))
+                 ("C-c C-j" . ,(helm-mpd-action 'helm-mpd-show-raw-data t 'persistent))
+                 ("M-g g" . helm-mpd-current-playlist-move)))
+      (define-key m (kbd (car v)) (cdr v)))
+    m)
+  "Keymap for `helm-mpd-current-playlist'.")
 
 (defun helm-mpd-current-playlist-build-source (&optional name &rest args)
   (setq name (or name "Current playlist"))
   (apply #'helm-make-source name 'helm-source-mpd-songs
     :candidates 'helm-mpd-current-playlist-candidates
     :init 'helm-mpd-current-playlist-retrieve
+    :action 'helm-mpd-current-playlist-actions
+    :keymap helm-mpd-current-playlist-map
     args))
 
 ;;;###autoload
