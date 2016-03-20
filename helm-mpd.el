@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-20 16:53:32 tuemura>
+;; Time-stamp: <2016-03-20 17:09:16 tuemura>
 ;;
 ;;; Code:
 
@@ -399,34 +399,45 @@ but does not exit helm session."
     (helm-mpd-format-songs (mpd-get-playlist-entry conn))))
 
 (defun helm-mpd-song--match-pattern (p song)
-  (if (string-match "^%\\(.\\)\\(.*\\)$" p)
-      (let ((lead (match-string 1 p))
-            (q (match-string 2 p))
-            (key nil))
-        (cond ((equal lead "f")
-               (setq key 'file))
-              ((equal lead "a")
-               (setq key 'Artist))
-              ((equal lead "t")
-               (setq key 'Title))
-              ((equal lead "b")
-               (setq key 'Album))
-              ((equal lead "y")
-               (setq key 'Date))
-              ((equal lead "n")
-               (setq key 'Track))
-              ((equal lead "g")
-               (setq key 'Genre)))
-        (when (and key (assq key song))
-          (string-match q (cdr (assq key song)))))
-    (cl-loop for v in song
-             thereis (string-match p (cdr v)))))
+  (let ((mfn (if helm-migemo-mode
+                 #'helm-mm-migemo-string-match
+               #'string-match)))
+    (if (string-match "^%\\(.\\)\\(.*\\)$" p)
+        (let ((lead (match-string 1 p))
+              (q (match-string 2 p))
+              (key nil))
+          (cond ((equal lead "f")
+                 (setq key 'file))
+                ((equal lead "a")
+                 (setq key 'Artist))
+                ((equal lead "t")
+                 (setq key 'Title))
+                ((equal lead "b")
+                 (setq key 'Album))
+                ((equal lead "y")
+                 (setq key 'Date))
+                ((equal lead "n")
+                 (setq key 'Track))
+                ((equal lead "g")
+                 (setq key 'Genre)))
+          (when (and key (assq key song))
+            (funcall mfn q (cdr (assq key song)))))
+      (cl-loop for v in song
+               thereis (funcall mfn p (cdr v))))))
 
 (defun helm-mpd-songs-match-function (candidate)
   (let ((song (get-text-property 0 :real-value candidate)))
     (cl-loop with pattern = helm-pattern
              for p in (split-string pattern " ")
              always (helm-mpd-song--match-pattern p song))))
+
+(defun helm-mpd-display-song (song)
+  (propertize (funcall helm-mpd-song-format song)
+              :real-value song))
+
+(defclass helm-source-mpd-songs (helm-source)
+  ((match :initform '(helm-mpd-songs-match-function))
+   (real-to-display :initform 'helm-mpd-display-song)))
 
 (defvar helm-mpd-current-playlist-candidates nil)
 
@@ -444,13 +455,9 @@ but does not exit helm session."
 
 (defun helm-mpd-current-playlist-build-source (&optional name &rest args)
   (setq name (or name "Current playlist"))
-  (apply #'helm-make-source name 'helm-source
+  (apply #'helm-make-source name 'helm-source-mpd-songs
     :candidates 'helm-mpd-current-playlist-candidates
     :init 'helm-mpd-current-playlist-retrieve
-    :match 'helm-mpd-songs-match-function
-    :real-to-display (lambda (c)
-                       (propertize (funcall helm-mpd-song-format c)
-                                   :real-value c))
     args))
 
 ;;;###autoload
