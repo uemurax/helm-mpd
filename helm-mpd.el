@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-20 18:38:55 tuemura>
+;; Time-stamp: <2016-03-20 19:04:17 tuemura>
 ;;
 ;;; Code:
 
@@ -477,6 +477,17 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
   (propertize (funcall helm-mpd-song-format song)
               :real-value song))
 
+(defun helm-mpd-songs-enqueue (songs)
+  (let ((paths (apply #'append
+                      (mapcar (lambda (song)
+                                (when (assq 'file song)
+                                  (list (cdr (assq 'file song)))))
+                              songs))))
+    (helm-mpd-send (mapcar (lambda (path)
+                             (helm-mpdlib-make-command 'add path))
+                           paths)
+                   nil)))
+
 (defclass helm-source-mpd-songs (helm-source)
   ((match :initform '(helm-mpd-songs-match-function))
    (real-to-display :initform 'helm-mpd-display-song)))
@@ -568,189 +579,38 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
 ;; Libraries
 ;; ----------------------------------------------------------------
 
-;;; ----------------------------------------------------------------
-;;; Songs
-;;; ----------------------------------------------------------------
+(defvar helm-mpd-library-candidates nil)
 
-(defclosure helm-mpd-song-candidates (conn &optional filter)
-  "Get all songs in MPD library."
-  (lambda ()
-    (cl-labels ((get-songs (conn)
-                           (if (consp filter)
-                               (mpd-search conn (car filter) (cdr filter))
-                             (mpd-get-directory-songs conn))))
-      (helm-mpd-format-songs (get-songs conn)))))
+(defun helm-mpd-library-retrieve (&optional host port)
+  "Retrieve the library."
+  (setq host (or host helm-mpd-host)
+        port (or port helm-mpd-port))
+  (helm-mpdlib-send host port
+                    (helm-mpdlib-make-command 'listallinfo)
+                    (lambda ()
+                      (while (helm-mpdlib-received-p)
+                        (setq helm-mpd-library-candidates
+                              (cl-loop for x in (helm-mpdlib-read-objects '(file directory playlist))
+                                       when (assq 'file x)
+                                       collect x))))))
 
-(defun helm-mpd-enqueue (conn songs)
-  "Enqueue SONGS."
-  (mpd-enqueue conn
-               (mapcar (lambda (song)
-                         (plist-get song 'file))
-                       songs)))
-
-(defclosure helm-mpd-enqueue-files (conn)
-  "Enqueue selected songs."
-  (lambda (_ignore)
-    (helm-mpd-enqueue conn (helm-marked-candidates))))
-
-(defun helm-mpd-song-actions (conn)
-  "Actions for `helm-mpd-songs'."
+(defvar helm-mpd-library-actions
   (helm-make-actions
-   "Enqueue song(s)" (helm-mpd-enqueue-files conn)
-   (when (helm-mpd-has-tag-editor-p)
-     "Edit song(s)")
-   (helm-mpd-edit-songs conn)
-   "Edit lyrics" 'helm-mpd-edit-lyrics))
+   "Enqueue song(s)" (helm-mpd-action 'helm-mpd-songs-enqueue t))
+  "Actions for `helm-mpd-library'.")
 
-(defun helm-mpd-song-map (conn)
-  "Keymap in `helm-mpd-songs'."
-  (let ((m (make-sparse-keymap)))
-    (set-keymap-parent m (helm-mpd-map conn))
-    (dolist (v `(("M-E" . ,(helm-mpd-run-edit-songs conn))
-                 ("M-L" . helm-mpd-run-edit-lyrics)))
-      (define-key m (kbd (car v)) (cdr v)))
-    m))
-
-(defun helm-mpd-build-song-source (conn &optional filter)
-  "Build sources for `helm-mpd-songs'."
-  (helm-mpd-build-mpd-source conn "Songs"
-                             :candidates (helm-mpd-song-candidates conn filter)
-                             :action (helm-mpd-song-actions conn)
-                             :keymap (helm-mpd-song-map conn)
-                             :migemo t))
+(defun helm-mpd-library-build-source (&optional name &rest args)
+  (setq name (or name "Library"))
+  (helm-make-source name 'helm-source-mpd-songs
+    :candidates 'helm-mpd-library-candidates
+    :init 'helm-mpd-library-retrieve
+    :action 'helm-mpd-library-actions))
 
 ;;;###autoload
-(defun helm-mpd-songs (conn &optional filter)
-  "Helm for songs in MPD library."
-  (interactive (list (helm-mpd-read-host-and-port)))
-  (helm :sources (helm-mpd-build-song-source conn filter)
-        :buffer "*helm-mpd-songs*"))
-
-;;; ----------------------------------------------------------------
-;;; Artists
-;;; ----------------------------------------------------------------
-
-(defclosure helm-mpd-artist-candidates (conn)
-  "Get all artists in MPD library."
-  (lambda ()
-    (mapcar (lambda (x)
-              (propertize x 'face 'helm-mpd-artist-face))
-            (mpd-get-artists conn))))
-
-(defclosure helm-mpd-enqueue-artists (conn)
-  "Enqueue all songs of selected artists."
-  (lambda (_ignore)
-    (helm-mpd-enqueue conn
-                      (mpd-search conn 'artist (helm-marked-candidates)))))
-
-(helm-mpd-defaction helm-for-artists (conn)
-  "Run `helm-mpd-library' for selected artists."
-  (lambda (_ignore)
-    (helm-mpd-library conn `(artist . ,(helm-marked-candidates)))))
-
-(defun helm-mpd-artist-actions (conn)
-  "Actions for `helm-mpd-artists'."
-  (helm-make-actions
-   "Enqueue artist(s)' songs" (helm-mpd-enqueue-artists conn)
-   "Helm for artist(s)" (helm-mpd-helm-for-artists conn)))
-
-(defun helm-mpd-artist-map (conn)
-  "Keymap in `helm-mpd-artists'."
-  (let ((m (make-sparse-keymap)))
-    (set-keymap-parent m (helm-mpd-map conn))
-    (dolist (v `(("M-H" . ,(helm-mpd-run-helm-for-artists conn))))
-      (define-key m (kbd (car v)) (cdr v)))
-    m))
-
-(defun helm-mpd-build-artist-source (conn)
-  "Build sources for `helm-mpd-artists'."
-  (helm-mpd-build-mpd-source conn "Artists"
-                             :candidates (helm-mpd-artist-candidates conn)
-                             :action (helm-mpd-artist-actions conn)
-                             :keymap (helm-mpd-artist-map conn)
-                             :migemo t))
-
-;;;###autoload
-(defun helm-mpd-artists (conn)
-  "Helm for artists in MPD library."
-  (interactive (list (helm-mpd-read-host-and-port)))
-  (helm :sources (helm-mpd-build-artist-source conn)
-        :buffer "*helm-mpd-artists*"))
-
-;;; ----------------------------------------------------------------
-;;; Albums
-;;; ----------------------------------------------------------------
-
-(defclosure helm-mpd-album-candidates (conn &optional filter)
-  "Get all albums in MPD library."
-  (lambda ()
-    (let ((artist (if (and (consp filter) (eq (car filter) 'artist))
-                      (cdr filter)
-                    nil)))
-      (mapcar (lambda (x)
-                (propertize x 'face 'helm-mpd-album-face))
-              (mpd-get-artist-albums conn artist)))))
-
-(defclosure helm-mpd-enqueue-albums (conn)
-  "Enqueue all songs in selected albums."
-  (lambda (_ignore)
-    (helm-mpd-enqueue conn
-                      (mpd-search conn 'album (helm-marked-candidates)))))
-
-(helm-mpd-defaction helm-for-albums (conn)
-  "Run `helm-mpd-library' for selected albums."
-  (lambda (_ignore)
-    (helm-mpd-library conn `(album . ,(helm-marked-candidates)))))
-
-(defun helm-mpd-album-actions (conn)
-  "Actions for `helm-mpd-albums'."
-  (helm-make-actions
-   "Enqueue album(s)' songs" (helm-mpd-enqueue-albums conn)
-   "Helm for album(s)' songs" (helm-mpd-helm-for-albums conn)))
-
-(defun helm-mpd-album-map (conn)
-  "Keymap in `helm-mpd-albums'."
-  (let ((m (make-sparse-keymap)))
-    (set-keymap-parent m (helm-mpd-map conn))
-    (dolist (v `(("M-H" . ,(helm-mpd-run-helm-for-albums conn))))
-      (define-key m (kbd (car v)) (cdr v)))
-    m))
-
-(defun helm-mpd-build-album-source (conn &optional filter)
-  "Build sources for `helm-mpd-albums'."
-  (helm-mpd-build-mpd-source conn "Albums"
-                             :candidates (helm-mpd-album-candidates conn filter)
-                             :action (helm-mpd-album-actions conn)
-                             :keymap (helm-mpd-album-map conn)
-                             :migemo t))
-
-;;;###autoload
-(defun helm-mpd-albums (conn &optional filter)
-  "Helm for albums in MPD library."
-  (interactive (list (helm-mpd-read-host-and-port)))
-  (helm :sources (helm-mpd-build-album-source conn filter)
-        :buffer "*helm-mpd-albums*"))
-
-;;; ----------------------------------------------------------------
-;;; Put together
-;;; ----------------------------------------------------------------
-
-(defun helm-mpd-build-library-source (conn &optional filter)
-  "Build sources for `helm-mpd-library'."
-  (concatenate 'list
-               (list (helm-mpd-build-song-source conn filter))
-               (unless filter
-                 (list (helm-mpd-build-artist-source conn)))
-               (unless (and filter (eq (car filter) 'album))
-                 (list (helm-mpd-build-album-source conn filter)))))
-
-;;;###autoload
-(defun helm-mpd-library (conn &optional filter)
-  "Helm for MPD library.
-
-This is a mixture of `helm-mpd-songs', `helm-mpd-artists' and `helm-mpd-albums'."
-  (interactive (list (helm-mpd-read-host-and-port)))
-  (helm :sources (helm-mpd-build-library-source conn filter)
+(defun helm-mpd-library (host port)
+  "Helm for MPD library."
+  (interactive (helm-mpd-interactive-host-and-port))
+  (helm :sources (helm-mpd-library-build-source)
         :buffer "*helm-mpd-library*"))
 
 ;; ----------------------------------------------------------------
