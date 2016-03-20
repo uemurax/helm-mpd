@@ -4,13 +4,13 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-20 20:07:07 tuemura>
+;; Time-stamp: <2016-03-20 22:35:11 tuemura>
 ;;
 ;;; Code:
 
 (require 'helm)
 (require 'helm-mpdlib)
-(require 'libmpdee)
+(eval-when-compile (require 'cl))
 
 (defgroup helm-mpd nil
   "Predefined configurations for `helm-mpd.el'."
@@ -36,10 +36,11 @@ Otherwise returns `helm-mpd-host' and `helm-mpd-port'."
             (read-number "Port: " helm-mpd-port))
     (list helm-mpd-host helm-mpd-port)))
 
-(defun helm-mpd-send (str callback &optional cbarg)
+(cl-defun helm-mpd-send (str &optional callback cbarg
+                             &key (output-buffer "*helm-mpd-default-output*"))
   "Run `helm-mpdlib-send' with `helm-mpd-host' and `helm-mpd-port'."
   (helm-mpdlib-send helm-mpd-host helm-mpd-port
-                    str callback cbarg))
+                    str callback cbarg :output-buffer output-buffer))
 
 (defun helm-mpd-action (fun &optional on-marked command)
   "Make a helm action.
@@ -158,8 +159,7 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
                               songs))))
     (helm-mpd-send (mapcar (lambda (path)
                              (helm-mpdlib-make-command 'add path))
-                           paths)
-                   nil)))
+                           paths))))
 
 ;; ----------------------------------------------------------------
 ;; Current playlist
@@ -167,22 +167,22 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
 
 (defvar helm-mpd-current-playlist-candidates nil)
 
-(defun helm-mpd-current-playlist-retrieve (&optional host port)
+(defun helm-mpd-current-playlist-retrieve ()
   "Retrieve the current playlist."
-  (setq host (or host helm-mpd-host)
-        port (or port helm-mpd-port))
-  (helm-mpdlib-send host port
-                    (helm-mpdlib-make-command 'playlistinfo)
-                    (lambda ()
-                      (while (helm-mpdlib-received-p)
-                        (setq helm-mpd-current-playlist-candidates
-                              (helm-mpdlib-read-objects '(file)))))))
+  (let ((buf "*helm-mpd-current-playlist-output*"))
+    (helm-mpd-send (helm-mpdlib-make-command 'playlistinfo)
+                   (lambda ()
+                     (while (helm-mpdlib-received-p)
+                       (setq helm-mpd-current-playlist-candidates
+                             (helm-mpdlib-read-objects '(file))))
+                     (when (helm-alive-p)
+                       (helm-update)))
+                   nil :output-buffer buf)))
 
 (defun helm-mpd-current-playlist-play (song)
   (let ((pos (cdr (assq 'Pos song))))
     (when pos
-      (helm-mpd-send (helm-mpdlib-make-command 'play pos)
-                     nil))))
+      (helm-mpd-send (helm-mpdlib-make-command 'play pos)))))
 
 (defun helm-mpd-current-playlist-delete (songs)
   (let ((poss (apply #'append
@@ -193,8 +193,7 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
                              songs))))
     (helm-mpd-send (mapcar (lambda (pos)
                              (helm-mpdlib-make-command 'delete pos))
-                           (seq-uniq (seq-sort '> poss)))
-                   nil)))
+                           (seq-uniq (seq-sort '> poss))))))
 
 (defun helm-mpd-current-playlist-move (n)
   (interactive (list (if current-prefix-arg
@@ -207,8 +206,7 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
       (when c
         (let ((pos (cdr (assq 'Pos c))))
           (when pos
-            (helm-mpd-send (helm-mpdlib-make-command 'move pos n)
-                           nil)))))))
+            (helm-mpd-send (helm-mpdlib-make-command 'move pos n))))))))
 (put 'helm-mpd-current-playlist-move 'helm-only t)
 
 (defvar helm-mpd-current-playlist-actions
@@ -254,18 +252,17 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
 
 (defvar helm-mpd-library-candidates nil)
 
-(defun helm-mpd-library-retrieve (&optional host port)
+(defun helm-mpd-library-retrieve ()
   "Retrieve the library."
-  (setq host (or host helm-mpd-host)
-        port (or port helm-mpd-port))
-  (helm-mpdlib-send host port
-                    (helm-mpdlib-make-command 'listallinfo)
-                    (lambda ()
-                      (while (helm-mpdlib-received-p)
-                        (setq helm-mpd-library-candidates
-                              (cl-loop for x in (helm-mpdlib-read-objects '(file directory playlist))
-                                       when (assq 'file x)
-                                       collect x))))))
+  (let ((buf "*helm-mpd-library-output*"))
+    (helm-mpd-send (helm-mpdlib-make-command 'listallinfo)
+                   (lambda ()
+                     (while (helm-mpdlib-received-p)
+                       (setq helm-mpd-library-candidates
+                             (cl-loop for x in (helm-mpdlib-read-objects '(file directory playlist))
+                                      when (assq 'file x)
+                                      collect x))))
+                   nil :output-buffer buf)))
 
 (defvar helm-mpd-library-actions
   (helm-make-actions
@@ -306,17 +303,16 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
 
 (defvar helm-mpd-playlist-candidates nil)
 
-(defun helm-mpd-playlist-retrieve (&optional host port)
-  (setq host (or host helm-mpd-host)
-        port (or port helm-mpd-port))
-  (helm-mpdlib-send host port
-                    (helm-mpdlib-make-command 'listplaylists)
-                    (lambda ()
-                      (while (helm-mpdlib-received-p)
-                        (setq helm-mpd-playlist-candidates
-                              (cl-loop for x in (helm-mpdlib-read-objects '(playlist))
-                                       when (assq 'playlist x)
-                                       collect x))))))
+(defun helm-mpd-playlist-retrieve ()
+  (let ((buf "*helm-mpd-playlist-output*"))
+    (helm-mpd-send (helm-mpdlib-make-command 'listplaylists)
+                   (lambda ()
+                     (while (helm-mpdlib-received-p)
+                       (setq helm-mpd-playlist-candidates
+                             (cl-loop for x in (helm-mpdlib-read-objects '(playlist))
+                                      when (assq 'playlist x)
+                                      collect x))))
+                   nil :output-buffer buf)))
 
 (defun helm-mpd-playlist-names (playlists)
   (apply #'append
@@ -328,14 +324,12 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
 (defun helm-mpd-playlist-load (playlists)
   (helm-mpd-send (mapcar (lambda (n)
                            (helm-mpdlib-make-command 'load n))
-                         (helm-mpd-playlist-names playlists))
-                 nil))
+                         (helm-mpd-playlist-names playlists))))
 
 (defun helm-mpd-playlist-remove (playlists)
   (helm-mpd-send (mapcar (lambda (n)
                            (helm-mpdlib-make-command 'rm n))
-                         (helm-mpd-playlist-names playlists))
-                 nil))
+                         (helm-mpd-playlist-names playlists))))
 
 (defun helm-mpd-playlist-rename (playlist)
   (let ((x (assq 'playlist playlist)))
@@ -344,8 +338,7 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
                                    (mapcar (lambda (c)
                                              (cdr (assq 'playlist c)))
                                            helm-mpd-playlist-candidates))))
-        (helm-mpd-send (helm-mpdlib-make-command 'rename (cdr x) name)
-                       nil)))))
+        (helm-mpd-send (helm-mpdlib-make-command 'rename (cdr x) name))))))
 
 (defvar helm-mpd-playlist-actions
   (helm-make-actions
@@ -388,8 +381,7 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
           :buffer "*helm-mpd-playlist*")))
 
 (defun helm-mpd-new-playlist-save (name)
-  (helm-mpd-send (helm-mpdlib-make-command 'save name)
-                 nil))
+  (helm-mpd-send (helm-mpdlib-make-command 'save name)))
 
 (defvar helm-mpd-new-playlist-actions
   (helm-make-actions
