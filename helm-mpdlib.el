@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-20 22:20:06 tuemura>
+;; Time-stamp: <2016-03-21 01:53:28 tuemura>
 ;;
 ;;; Code:
 
@@ -79,20 +79,21 @@ with the current buffer containing the response.
 
 If STR is a list of strings, send them sequentially."
   (setq output-buffer (or output-buffer (generate-new-buffer-name "*helm-mpdlib-output*")))
-  (or (get-buffer-process output-buffer)
-      (let ((proc (open-network-stream "MPD connection" output-buffer
-                                       host port)))
-        ;; discard the first line.
-        (set-process-filter proc nil)
-        (accept-process-output proc 0 50)
+  (let ((proc (or (get-buffer-process output-buffer)
+                  (let ((proc (open-network-stream "MPD connection" output-buffer
+                                                   host port)))
+                    ;; discard the first line.
+                    (set-process-filter proc nil)
+                    (accept-process-output proc 0 50)
 
-        (set-process-filter proc (apply #'helm-mpdlib-filter callback cbarg))
-        (let ((ls (if (listp str)
-                      str
-                    (list str))))
-          (dolist (s ls)
-            (process-send-string proc s)))
-        proc)))
+                    (set-process-filter proc (apply #'helm-mpdlib-filter callback cbarg))
+                    proc))))
+    (let ((ls (if (listp str)
+                  str
+                (list str))))
+      (dolist (s ls)
+        (process-send-string proc s)))
+    proc))
 
 (defun helm-mpdlib-make-command (command &rest args)
   (format "%s %s\n"
