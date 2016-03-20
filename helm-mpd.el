@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-20 19:46:54 tuemura>
+;; Time-stamp: <2016-03-20 19:51:26 tuemura>
 ;;
 ;;; Code:
 
@@ -727,17 +727,19 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
 ;; ----------------------------------------------------------------
 
 ;;;###autoload
-(defun helm-mpd (conn)
+(defun helm-mpd (host port)
   "Helm for MPD.
 
-This is a mixture of `helm-mpd-current-playlist', `helm-mpd-library' and
-`helm-mpd-playlist'."
-  (interactive (list (helm-mpd-read-host-and-port)))
-  (helm :sources (concatenate 'list
-                              (list (helm-mpd-build-current-playlist-source conn))
-                              (helm-mpd-build-library-source conn)
-                              (helm-mpd-build-playlist-source conn))
-        :buffer "*helm-mpd*"))
+This is a mixture of `helm-mpd-current-playlist', `helm-mpd-library',
+`helm-mpd-playlist' and `helm-mpd-new-playlist'."
+  (interactive (helm-mpd-interactive-host-and-port))
+  (let ((helm-mpd-host host)
+        (helm-mpd-port port))
+    (helm :sources (list (helm-mpd-current-playlist-build-source)
+                         (helm-mpd-library-build-source)
+                         (helm-mpd-playlist-build-source)
+                         (helm-mpd-new-playlist-build-source))
+          :buffer "*helm-mpd*")))
 
 (provide 'helm-mpd)
 
