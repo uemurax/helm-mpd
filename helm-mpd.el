@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-20 16:03:55 tuemura>
+;; Time-stamp: <2016-03-20 16:53:32 tuemura>
 ;;
 ;;; Code:
 
@@ -398,6 +398,36 @@ but does not exit helm session."
   (lambda ()
     (helm-mpd-format-songs (mpd-get-playlist-entry conn))))
 
+(defun helm-mpd-song--match-pattern (p song)
+  (if (string-match "^%\\(.\\)\\(.*\\)$" p)
+      (let ((lead (match-string 1 p))
+            (q (match-string 2 p))
+            (key nil))
+        (cond ((equal lead "f")
+               (setq key 'file))
+              ((equal lead "a")
+               (setq key 'Artist))
+              ((equal lead "t")
+               (setq key 'Title))
+              ((equal lead "b")
+               (setq key 'Album))
+              ((equal lead "y")
+               (setq key 'Date))
+              ((equal lead "n")
+               (setq key 'Track))
+              ((equal lead "g")
+               (setq key 'Genre)))
+        (when (and key (assq key song))
+          (string-match q (cdr (assq key song)))))
+    (cl-loop for v in song
+             thereis (string-match p (cdr v)))))
+
+(defun helm-mpd-songs-match-function (candidate)
+  (let ((song (get-text-property 0 :real-value candidate)))
+    (cl-loop with pattern = helm-pattern
+             for p in (split-string pattern " ")
+             always (helm-mpd-song--match-pattern p song))))
+
 (defvar helm-mpd-current-playlist-candidates nil)
 
 (defun helm-mpd-current-playlist-retrieve (&optional host port)
@@ -409,7 +439,7 @@ but does not exit helm session."
                     (lambda ()
                       (while (helm-mpdlib-received-p)
                         (setq helm-mpd-current-playlist-candidates
-                              (helm-mpd-format-songs (helm-mpdlib-read-objects '(file)))))
+                              (helm-mpdlib-read-objects '(file))))
                       (helm-update))))
 
 (defun helm-mpd-current-playlist-build-source (&optional name &rest args)
@@ -417,6 +447,10 @@ but does not exit helm session."
   (apply #'helm-make-source name 'helm-source
     :candidates 'helm-mpd-current-playlist-candidates
     :init 'helm-mpd-current-playlist-retrieve
+    :match 'helm-mpd-songs-match-function
+    :real-to-display (lambda (c)
+                       (propertize (funcall helm-mpd-song-format c)
+                                   :real-value c))
     args))
 
 ;;;###autoload
