@@ -3,4 +3,16 @@
        :pkgname "uemurax/helm-mpd"
        :depends (helm)
        :description "Helm interface for MPD"
-       :website "https://github.com/uemurax/helm-mpd")
+       :website "https://github.com/uemurax/helm-mpd"
+       :prepare (progn
+                  (autoload 'helm-mpd-current-playlist "helm-mpd.el"
+                    "Helm for current playlist." t)
+                  (autoload 'helm-mpd-library "helm-mpd.el"
+                    "Helm for library." t)
+                  (autoload 'helm-mpd-playlist "helm-mpd.el"
+                    "Helm for playlists." t)
+                  (autoload 'helm-mpd "helm-mpd.el"
+                    "Helm for MPD.
+
+This is a mixture of `helm-mpd-current-playlist', `helm-mpd-library',
+and `helm-mpd-playlist'." t)))

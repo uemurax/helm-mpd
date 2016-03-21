@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-22 07:57:09 tuemura>
+;; Time-stamp: <2016-03-22 08:02:05 tuemura>
 ;;
 ;;; Code:
 
@@ -347,7 +347,6 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
   :action 'helm-mpd-current-playlist-actions
   :keymap helm-mpd-current-playlist-map)
 
-;;;###autoload
 (defcommand helm-mpd-current-playlist
   (run-helm ((current-playlist nil
                                :after-init-hook 'helm-source-mpd-after-init-hook))
@@ -378,7 +377,6 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
   :action 'helm-mpd-library-actions
   :keymap helm-mpd-library-map)
 
-;;;###autoload
 (defcommand helm-mpd-library
   (run-helm ((library nil
                       :after-init-hook 'helm-source-mpd-after-init-hook))
@@ -466,7 +464,6 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
   :action 'helm-mpd-playlist-actions
   :keymap helm-mpd-playlist-map)
 
-;;;###autoload
 (defcommand helm-mpd-playlist
   (run-helm ((playlist nil
                        :after-init-hook 'helm-source-mpd-after-init-hook))
@@ -490,7 +487,6 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
 
 ;;;;; Put together
 
-;;;###autoload
 (defcommand helm-mpd
   (run-helm ((current-playlist nil
                                :after-init-hook 'helm-source-mpd-after-init-hook)
