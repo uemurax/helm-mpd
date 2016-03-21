@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-22 07:34:58 tuemura>
+;; Time-stamp: <2016-03-22 07:43:44 tuemura>
 ;;
 ;;; Code:
 
@@ -50,7 +50,7 @@ Otherwise returns `helm-mpd-network-parameters'."
                                       :host host
                                       :service service))
       (helm-mpdlib-delete-all-processes)))
-    helm-mpd-network-parameters)
+  helm-mpd-network-parameters)
 
 (defun helm-mpd-send (str &optional callback cbargs &rest network-args)
   "Run `helm-mpdlib-send' with `helm-mpd-network-parameters'."
@@ -256,13 +256,13 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
                                     (cons (intern (format "helm-mpd-%s-build-source" (car s)))
                                           (cdr s))))
                             sources))
-           (args0 (apply #'append
-                         (mapcar (lambda (s)
-                                   (when (consp s)
-                                     (setq s (car s)))
-                                   (list (intern (format ":mpd-%s-source" s))
-                                         (intern (format "helm-mpd-run-helm:%s-source" s))))
-                                 sources))))
+          (args0 (apply #'append
+                        (mapcar (lambda (s)
+                                  (when (consp s)
+                                    (setq s (car s)))
+                                  (list (intern (format ":mpd-%s-source" s))
+                                        (intern (format "helm-mpd-run-helm:%s-source" s))))
+                                sources))))
       `(let ,let-vars
          (helm :sources (list ,@(mapcar #'car let-vars))
                :truncate-lines t
