@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-22 03:08:24 tuemura>
+;; Time-stamp: <2016-03-22 04:39:27 tuemura>
 ;;
 ;;; Code:
 
@@ -511,11 +511,7 @@ This is a mixture of `helm-mpd-current-playlist', `helm-mpd-library',
     (let ((res (cdr (assq :data (helm-mpdlib-read-response)))))
       (mapc (lambda (x)
               (helm-mpd-mode-line-data-update (car x) (cdr x)))
-            res)
-      (when (assq 'song res)            ;response for `status'
-        (process-send-string proc
-                             (helm-mpdlib-make-command 'playlistinfo
-                                                       (cdr (assq 'song res)))))))
+            res)))
   (condition-case e
       (with-helm-buffer
         (force-mode-line-update))
@@ -527,7 +523,8 @@ This is a mixture of `helm-mpd-current-playlist', `helm-mpd-library',
         (with-helm-buffer
           (let ((buf "*helm-mpd-mode-line-output*"))
             (helm-mpd-send (list (helm-mpdlib-make-command 'status)
-                                 (helm-mpdlib-make-command 'stats))
+                                 (helm-mpdlib-make-command 'stats)
+                                 (helm-mpdlib-make-command 'currentsong))
                            #'helm-mpd-mode-line-update-callback
                            nil :output-buffer buf))
           (run-with-timer 1 nil #'helm-mpd-mode-line-update))
