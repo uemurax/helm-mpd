@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-22 02:15:34 tuemura>
+;; Time-stamp: <2016-03-22 03:08:24 tuemura>
 ;;
 ;;; Code:
 
@@ -105,14 +105,42 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
   "Time face."
   :group 'helm-mpd)
 
+(defface helm-mpd-date-face
+  '((t (:inherit font-lock-constant-face)))
+  "Date face."
+  :group 'helm-mpd)
+
+(defface helm-mpd-track-face
+  '((t (:inherit font-lock-string-face)))
+  "Track face."
+  :group 'helm-mpd)
+
 (defcustom helm-mpd-song-format
   (lambda (song)
-    (mapconcat (lambda (x)
-                 (propertize (or (cdr (assq (car x) song)) "") 'face (cdr x)))
-               '((Artist . helm-mpd-artist-face)
-                 (Title . helm-mpd-title-face)
-                 (Album . helm-mpd-album-face))
-               " "))
+    (let* ((track-width 6)
+           (time-width 6)
+           (date-width 5)
+           (total-width (window-width))
+           (w (- total-width track-width time-width date-width))
+           (artist-width (floor (* 0.2 w)))
+           (title-width (floor (* 0.5 w)))
+           (album-width (- w artist-width title-width)))
+      (labels ((f (key width face)
+                  (propertize (truncate-string-to-width (or (cdr (assq key song)) "")
+                                                        width nil ? )
+                              'face face)))
+        (concat (f 'Artist artist-width 'helm-mpd-artist-face)
+                (f 'Track track-width 'helm-mpd-track-face)
+                (f 'Title title-width 'helm-mpd-title-face)
+                (f 'Date date-width 'helm-mpd-date-face)
+                (f 'Album album-width 'helm-mpd-album-face)
+                (propertize (truncate-string-to-width
+                             (let ((time (cdr (assq 'Time song))))
+                               (if time
+                                   (helm-mpd-format-time (string-to-number time))
+                                 ""))
+                             time-width nil ? )
+                            'face 'helm-mpd-time-face)))))
   "Function to format a song."
   :group 'helm-mpd
   :type 'function)
@@ -218,6 +246,7 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
                                  sources))))
       `(let ,let-vars
          (helm :sources (list ,@(mapcar #'car let-vars))
+               :truncate-lines t
                ,@args0
                ,@args)))))
 
@@ -524,21 +553,33 @@ This is a mixture of `helm-mpd-current-playlist', `helm-mpd-library',
     (:propertize (:eval (cdr (assq 'Artist helm-mpd-mode-line-data)))
                  face helm-mpd-artist-face)
     " "
+    ("("
+     (:propertize (:eval (cdr (assq 'Track helm-mpd-mode-line-data)))
+                  face helm-mpd-track-face)
+     ")")
+    " "
     (:propertize (:eval (cdr (assq 'Title helm-mpd-mode-line-data)))
                  face helm-mpd-title-face)
+    " "
+    ("("
+     (:propertize (:eval (cdr (assq 'Date helm-mpd-mode-line-data)))
+                  face helm-mpd-date-face)
+     ")")
     " "
     (:propertize (:eval (cdr (assq 'Album helm-mpd-mode-line-data)))
                  face helm-mpd-album-face)
     " "
-    (:eval (let ((x (cdr (assq 'time helm-mpd-mode-line-data))))
-             (when x
-               (let ((y (helm-mpdlib-parse-time x)))
-                 (when y
-                   `((:propertize ,(helm-mpd-format-time (car y))
-                                  face helm-mpd-time-face)
-                     "/"
-                     (:propertize ,(helm-mpd-format-time (cdr y))
-                                  face helm-mpd-time-face))))))))
+    ("["
+     (:eval (let ((x (cdr (assq 'time helm-mpd-mode-line-data))))
+              (when x
+                (let ((y (helm-mpdlib-parse-time x)))
+                  (when y
+                    `((:propertize ,(helm-mpd-format-time (car y))
+                                   face helm-mpd-time-face)
+                      "/"
+                      (:propertize ,(helm-mpd-format-time (cdr y))
+                                   face helm-mpd-time-face)))))))
+     "]"))
   "Mode line format in `helm-mpd'."
   :group 'helm-mpd
   :type 'sexp)
