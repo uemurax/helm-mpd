@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-22 07:27:06 tuemura>
+;; Time-stamp: <2016-03-22 08:06:44 tuemura>
 ;;
 ;;; Code:
 
@@ -78,7 +78,7 @@
             (r (cddr plist)))
         (if (eq k key)
             (cons key (cons value r))
-          (cons k (cons v (helm-mpd--plist-update-1 r key value)))))
+          (cons k (cons v (helm-mpdlib--plist-update-1 r key value)))))
     (list key value)))
 
 (defun helm-mpdlib-plist-update (plist &rest args)
