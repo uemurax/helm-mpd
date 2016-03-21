@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-21 21:28:27 tuemura>
+;; Time-stamp: <2016-03-21 23:38:54 tuemura>
 ;;
 ;;; Code:
 
@@ -144,10 +144,6 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
   (propertize (funcall helm-mpd-song-format song)
               :real-value song))
 
-(defclass helm-source-mpd-songs (helm-source)
-  ((match :initform '(helm-mpd-songs-match-function))
-   (real-to-display :initform 'helm-mpd-display-song)))
-
 (defun helm-mpd-songs-enqueue (songs)
   (let ((paths (apply #'append
                       (mapcar (lambda (song)
@@ -214,6 +210,16 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
          (helm :sources (list ,@(mapcar #'car let-vars))
                ,@args0
                ,@args)))))
+
+(defclass helm-source-mpd-base (helm-source)
+  ((is-mpd-source :initform t)))
+
+(defun helm-source-mpd-p (source)
+  (assq 'is-mpd-source source))
+
+(defclass helm-source-mpd-songs (helm-source-mpd-base)
+  ((match :initform '(helm-mpd-songs-match-function))
+   (real-to-display :initform 'helm-mpd-display-song)))
 
 ;;;;; Current playlist
 
@@ -391,7 +397,7 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
   (cl-loop for x in (helm-mpdlib-read-objects '(playlist))
            when (assq 'playlist x)
            collect x)
-  helm-source
+  helm-source-mpd-base
   :real-to-display (lambda (c)
                      (cdr (assq 'playlist c)))
   :action 'helm-mpd-playlist-actions
@@ -416,8 +422,10 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
 
 (defun helm-mpd-new-playlist-build-source (&optional name &rest args)
   (setq name (or name "Create playlist"))
-  (apply #'helm-make-source name 'helm-source-dummy
+  (apply #'helm-make-source name 'helm-source-mpd-base
          :action 'helm-mpd-new-playlist-actions
+         :filtered-candidate-transformer (lambda (c s)
+                                           (list helm-pattern))
          args))
 
 ;;;###autoload
