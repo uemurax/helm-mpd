@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-22 04:39:27 tuemura>
+;; Time-stamp: <2016-03-22 07:34:58 tuemura>
 ;;
 ;;; Code:
 
@@ -16,31 +16,50 @@
   "Predefined configurations for `helm-mpd.el'."
   :group 'helm)
 
-(defcustom helm-mpd-host "localhost"
-  "Default host for `helm-mpd'."
+(defcustom helm-mpd-network-parameters
+  (list :name "helm-mpd connection"
+        :buffer "*helm-mpd-default-output*"
+        :host 'local
+        :service 6600)
+  "Default network parameters for `helm-mpd'."
   :group 'helm-mpd
-  :type 'string)
+  :type 'list)
 
-(defcustom helm-mpd-port 6600
-  "Default port for `helm-mpd'."
-  :group 'helm-mpd
-  :type 'integer)
-
-(defun helm-mpd-interactive-host-and-port ()
-  "Read host and port.
+(defun helm-mpd-interactive-network-args ()
+  "Read network parameters.
 
 If the current prefix argument is non-nil, read them from input.
-Otherwise returns `helm-mpd-host' and `helm-mpd-port'."
-  (if current-prefix-arg
-      (list (read-string "Host: " nil nil helm-mpd-host)
-            (read-number "Port: " helm-mpd-port))
-    (list helm-mpd-host helm-mpd-port)))
+Otherwise returns `helm-mpd-network-parameters'."
+  (when current-prefix-arg
+    (let ((family (intern (completing-read "Family: "
+                                           '(default local ipv4 ipv6)
+                                           nil t)))
+          (host nil)
+          (service nil))
+      (case family
+        ((default ipv4 ipv6)
+         (setq host (read-string "Host (default: localhost): " nil nil "localhost"))
+         (setq service (read-number "Port: " 6600)))
+        ((local)
+         (setq service (read-file-name "Socket: " (expand-file-name "~/.config/mpd/") nil t "socket"))))
+      (when (eq family 'default)
+        (setq family nil))
+      (setq helm-mpd-network-parameters
+            (helm-mpdlib-plist-update helm-mpd-network-parameters
+                                      :family family
+                                      :host host
+                                      :service service))
+      (helm-mpdlib-delete-all-processes)))
+    helm-mpd-network-parameters)
 
-(cl-defun helm-mpd-send (str &optional callback cbarg
-                             &key (output-buffer "*helm-mpd-default-output*"))
-  "Run `helm-mpdlib-send' with `helm-mpd-host' and `helm-mpd-port'."
-  (helm-mpdlib-send helm-mpd-host helm-mpd-port
-                    str callback cbarg :output-buffer output-buffer))
+(defun helm-mpd-send (str &optional callback cbargs &rest network-args)
+  "Run `helm-mpdlib-send' with `helm-mpd-network-parameters'."
+  (let ((network-args (apply #'helm-mpdlib-plist-update
+                             helm-mpd-network-parameters
+                             network-args)))
+    (apply #'helm-mpdlib-send
+           network-args
+           str callback cbargs)))
 
 (defun helm-mpd-action (fun &optional on-marked command)
   "Make a helm action.
@@ -217,7 +236,7 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
                                       (cons t ,form)))
                               (with-helm-buffer
                                 (helm-update nil ,source)))
-                            nil :output-buffer ,buf-var)))
+                            nil :buffer ,buf-var)))
          (defun ,build-source (&optional ,name-var &rest ,args-var)
            (setq ,name-var (or ,name-var ,source-name))
            (apply #'helm-make-source ,name-var ',class
@@ -321,11 +340,9 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
   :keymap helm-mpd-current-playlist-map)
 
 ;;;###autoload
-(defun helm-mpd-current-playlist (host port)
-  "Helm for current playlist."
-  (interactive (helm-mpd-interactive-host-and-port))
-  (let ((helm-mpd-host host)
-        (helm-mpd-port port))
+(defun helm-mpd-current-playlist (&rest network-args)
+  (interactive (helm-mpd-interactive-network-args))
+  (let ((helm-mpd-network-parameters network-args))
     (run-helm ((current-playlist nil
                                  :after-init-hook 'helm-source-mpd-after-init-hook))
               :buffer "*helm-mpd-current-playlist*")))
@@ -356,11 +373,10 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
   :keymap helm-mpd-library-map)
 
 ;;;###autoload
-(defun helm-mpd-library (host port)
+(defun helm-mpd-library (&rest network-args)
   "Helm for MPD library."
-  (interactive (helm-mpd-interactive-host-and-port))
-  (let ((helm-mpd-host host)
-        (helm-mpd-port port))
+  (interactive (helm-mpd-interactive-network-args))
+  (let ((helm-mpd-network-parameters network-args))
     (run-helm ((library nil
                         :after-init-hook 'helm-source-mpd-after-init-hook))
               :buffer "*helm-mpd-library*")))
@@ -400,7 +416,7 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
     (helm-mpd-send (mapcar (lambda (n)
                              (helm-mpdlib-make-command 'listplaylistinfo n))
                            (helm-mpd-playlist-names playlists))
-                   #'ignore nil :output-buffer buf)))
+                   #'ignore nil :buffer buf)))
 
 (defun helm-mpd-playlist-list (playlists)
   (let ((buf "*helm-mpd-playlist-list*"))
@@ -409,7 +425,7 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
     (helm-mpd-send (mapcar (lambda (n)
                              (helm-mpdlib-make-command 'listplaylist n))
                            (helm-mpd-playlist-names playlists))
-                   #'ignore nil :output-buffer buf)))
+                   #'ignore nil :buffer buf)))
 
 (defvar helm-mpd-playlist-actions
   (helm-make-actions
@@ -448,11 +464,10 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
   :keymap helm-mpd-playlist-map)
 
 ;;;###autoload
-(defun helm-mpd-playlist (host port)
+(defun helm-mpd-playlist (&rest network-args)
   "Helm for MPD playlists."
-  (interactive (helm-mpd-interactive-host-and-port))
-  (let ((helm-mpd-host host)
-        (helm-mpd-port port))
+  (interactive (helm-mpd-interactive-network-args))
+  (let ((helm-mpd-network-parameters network-args))
     (run-helm ((playlist nil
                          :after-init-hook 'helm-source-mpd-after-init-hook))
               :buffer "*helm-mpd-playlist*")))
@@ -476,14 +491,13 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
 ;;;;; Put together
 
 ;;;###autoload
-(defun helm-mpd (host port)
+(defun helm-mpd (&rest network-args)
   "Helm for MPD.
 
 This is a mixture of `helm-mpd-current-playlist', `helm-mpd-library',
 `helm-mpd-playlist' and `helm-mpd-new-playlist'."
-  (interactive (helm-mpd-interactive-host-and-port))
-  (let ((helm-mpd-host host)
-        (helm-mpd-port port))
+  (interactive (helm-mpd-interactive-network-args))
+  (let ((helm-mpd-network-parameters network-args))
     (run-helm ((current-playlist nil
                                  :after-init-hook 'helm-source-mpd-after-init-hook)
                library playlist new-playlist)
@@ -526,7 +540,7 @@ This is a mixture of `helm-mpd-current-playlist', `helm-mpd-library',
                                  (helm-mpdlib-make-command 'stats)
                                  (helm-mpdlib-make-command 'currentsong))
                            #'helm-mpd-mode-line-update-callback
-                           nil :output-buffer buf))
+                           nil :buffer buf))
           (run-with-timer 1 nil #'helm-mpd-mode-line-update))
       (error nil))))
 

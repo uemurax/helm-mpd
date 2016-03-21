@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-22 01:40:29 tuemura>
+;; Time-stamp: <2016-03-22 07:27:06 tuemura>
 ;;
 ;;; Code:
 
@@ -71,29 +71,61 @@
               (when (helm-mpdlib-received-p)
                 (apply callback proc cbarg)))))))))
 
-(defun helm-mpdlib-send (host port str callback &optional cbarg &key output-buffer)
-  "Send STR to HOST on PORT and CALLBACK with CBARG when finished.
+(defun helm-mpdlib--plist-update-1 (plist key value)
+  (if plist
+      (let ((k (car plist))
+            (v (cadr plist))
+            (r (cddr plist)))
+        (if (eq k key)
+            (cons key (cons value r))
+          (cons k (cons v (helm-mpd--plist-update-1 r key value)))))
+    (list key value)))
+
+(defun helm-mpdlib-plist-update (plist &rest args)
+  "Update a plist."
+  (if args
+      (let ((k (car args))
+            (v (cadr args))
+            (r (cddr args)))
+        (apply #'helm-mpdlib-plist-update (helm-mpdlib--plist-update-1 plist k v)
+               r))
+    plist))
+
+(defvar helm-mpdlib-processes nil)
+
+(defun helm-mpdlib-delete-all-processes ()
+  (dolist (proc helm-mpdlib-processes)
+    (delete-process proc))
+  (setq helm-mpdlib-processes nil))
+
+(defun helm-mpdlib-send (network-args str callback &rest cbargs)
+  "Send STR to process and CALLBACK with CBARGS when finished.
+
+NETWORK-ARGS is a plist passed to `make-network-process'.
 
 CALLBACK is called when the response has been completely retrieved,
 with the current buffer containing the response.
-CALLBACK is used of the form `(apply CALLBACK PROC CBARG)'.
+CALLBACK is used of the form `(apply CALLBACK PROC CBARGS)'.
 
 If STR is a list of strings, send them sequentially."
-  (setq output-buffer (or output-buffer (generate-new-buffer-name "*helm-mpdlib-output*")))
-  (let ((proc (or (get-buffer-process output-buffer)
-                  (let ((proc (open-network-stream "MPD connection" output-buffer
-                                                   host port)))
-                    ;; discard the first line.
-                    (set-process-filter proc nil)
-                    (accept-process-output proc 0 50)
+  (let* ((output-buffer (or (plist-get network-args :buffer)
+                            (generate-new-buffer-name "*helm-mpdlib-output*")))
+         (proc (get-buffer-process output-buffer)))
+    (unless proc
+      (setq proc (apply #'make-network-process
+                        (helm-mpdlib-plist-update network-args
+                                                  :buffer output-buffer)))
+      ;; discard the first line.
+      (set-process-filter proc nil)
+      (accept-process-output proc 0 50)
 
-                    (set-process-filter proc (apply #'helm-mpdlib-filter callback cbarg))
-                    proc))))
+      (set-process-filter proc (apply #'helm-mpdlib-filter callback cbargs)))
     (let ((ls (if (listp str)
                   str
                 (list str))))
       (dolist (s ls)
         (process-send-string proc s)))
+    (add-to-list 'helm-mpdlib-processes proc)
     proc))
 
 (defun helm-mpdlib-make-command (command &rest args)
