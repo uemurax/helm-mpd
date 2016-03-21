@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-22 07:43:44 tuemura>
+;; Time-stamp: <2016-03-22 07:57:09 tuemura>
 ;;
 ;;; Code:
 
@@ -30,27 +30,26 @@
 
 If the current prefix argument is non-nil, read them from input.
 Otherwise returns `helm-mpd-network-parameters'."
-  (when current-prefix-arg
-    (let ((family (intern (completing-read "Family: "
-                                           '(default local ipv4 ipv6)
-                                           nil t)))
-          (host nil)
-          (service nil))
-      (case family
-        ((default ipv4 ipv6)
-         (setq host (read-string "Host (default: localhost): " nil nil "localhost"))
-         (setq service (read-number "Port: " 6600)))
-        ((local)
-         (setq service (read-file-name "Socket: " (expand-file-name "~/.config/mpd/") nil t "socket"))))
-      (when (eq family 'default)
-        (setq family nil))
-      (setq helm-mpd-network-parameters
-            (helm-mpdlib-plist-update helm-mpd-network-parameters
-                                      :family family
-                                      :host host
-                                      :service service))
-      (helm-mpdlib-delete-all-processes)))
-  helm-mpd-network-parameters)
+  (if current-prefix-arg
+      (let ((family (intern (completing-read "Family: "
+                                             '(default local ipv4 ipv6)
+                                             nil t)))
+            (host nil)
+            (service nil))
+        (case family
+          ((default ipv4 ipv6)
+           (setq host (read-string "Host (default: localhost): " nil nil "localhost"))
+           (setq service (read-number "Port: " 6600)))
+          ((local)
+           (setq service (read-file-name "Socket: " (expand-file-name "~/.config/mpd/") nil t "socket"))))
+        (when (eq family 'default)
+          (setq family nil))
+        (helm-mpdlib-delete-all-processes)
+        (helm-mpdlib-plist-update helm-mpd-network-parameters
+                                  :family family
+                                  :host host
+                                  :service service))
+    helm-mpd-network-parameters))
 
 (defun helm-mpd-send (str &optional callback cbargs &rest network-args)
   "Run `helm-mpdlib-send' with `helm-mpd-network-parameters'."
@@ -267,7 +266,16 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
          (helm :sources (list ,@(mapcar #'car let-vars))
                :truncate-lines t
                ,@args0
-               ,@args)))))
+               ,@args))))
+
+  (defmacro defcommand (name &rest body)
+    `(defun ,name (&rest network-args)
+       (interactive (helm-mpd-interactive-network-args))
+       (setq helm-mpd-network-parameters
+             (apply #'helm-mpdlib-plist-update
+                    helm-mpd-network-parameters
+                    network-args))
+       ,@body)))
 
 (defclass helm-source-mpd-base (helm-source)
   ((is-mpd-source :initform t)))
@@ -340,12 +348,10 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
   :keymap helm-mpd-current-playlist-map)
 
 ;;;###autoload
-(defun helm-mpd-current-playlist (&rest network-args)
-  (interactive (helm-mpd-interactive-network-args))
-  (let ((helm-mpd-network-parameters network-args))
-    (run-helm ((current-playlist nil
-                                 :after-init-hook 'helm-source-mpd-after-init-hook))
-              :buffer "*helm-mpd-current-playlist*")))
+(defcommand helm-mpd-current-playlist
+  (run-helm ((current-playlist nil
+                               :after-init-hook 'helm-source-mpd-after-init-hook))
+            :buffer "*helm-mpd-current-playlist*"))
 
 ;;;;; Libraries
 
@@ -373,13 +379,10 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
   :keymap helm-mpd-library-map)
 
 ;;;###autoload
-(defun helm-mpd-library (&rest network-args)
-  "Helm for MPD library."
-  (interactive (helm-mpd-interactive-network-args))
-  (let ((helm-mpd-network-parameters network-args))
-    (run-helm ((library nil
-                        :after-init-hook 'helm-source-mpd-after-init-hook))
-              :buffer "*helm-mpd-library*")))
+(defcommand helm-mpd-library
+  (run-helm ((library nil
+                      :after-init-hook 'helm-source-mpd-after-init-hook))
+            :buffer "*helm-mpd-library*"))
 
 ;;;;; Play lists
 
@@ -464,13 +467,10 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
   :keymap helm-mpd-playlist-map)
 
 ;;;###autoload
-(defun helm-mpd-playlist (&rest network-args)
-  "Helm for MPD playlists."
-  (interactive (helm-mpd-interactive-network-args))
-  (let ((helm-mpd-network-parameters network-args))
-    (run-helm ((playlist nil
-                         :after-init-hook 'helm-source-mpd-after-init-hook))
-              :buffer "*helm-mpd-playlist*")))
+(defcommand helm-mpd-playlist
+  (run-helm ((playlist nil
+                       :after-init-hook 'helm-source-mpd-after-init-hook))
+            :buffer "*helm-mpd-playlist*"))
 
 (defun helm-mpd-new-playlist-save (name)
   (helm-mpd-send (helm-mpdlib-make-command 'save name)))
@@ -491,17 +491,11 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
 ;;;;; Put together
 
 ;;;###autoload
-(defun helm-mpd (&rest network-args)
-  "Helm for MPD.
-
-This is a mixture of `helm-mpd-current-playlist', `helm-mpd-library',
-`helm-mpd-playlist' and `helm-mpd-new-playlist'."
-  (interactive (helm-mpd-interactive-network-args))
-  (let ((helm-mpd-network-parameters network-args))
-    (run-helm ((current-playlist nil
-                                 :after-init-hook 'helm-source-mpd-after-init-hook)
-               library playlist new-playlist)
-              :buffer "*helm-mpd*")))
+(defcommand helm-mpd
+  (run-helm ((current-playlist nil
+                               :after-init-hook 'helm-source-mpd-after-init-hook)
+             library playlist new-playlist)
+            :buffer "*helm-mpd*"))
 
 ;;;; Mode line
 
