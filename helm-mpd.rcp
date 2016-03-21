@@ -5,13 +5,13 @@
        :description "Helm interface for MPD"
        :website "https://github.com/uemurax/helm-mpd"
        :prepare (progn
-                  (autoload 'helm-mpd-current-playlist "helm-mpd.el"
+                  (autoload 'helm-mpd-current-playlist "helm-mpd"
                     "Helm for current playlist." t)
-                  (autoload 'helm-mpd-library "helm-mpd.el"
+                  (autoload 'helm-mpd-library "helm-mpd"
                     "Helm for library." t)
-                  (autoload 'helm-mpd-playlist "helm-mpd.el"
+                  (autoload 'helm-mpd-playlist "helm-mpd"
                     "Helm for playlists." t)
-                  (autoload 'helm-mpd "helm-mpd.el"
+                  (autoload 'helm-mpd "helm-mpd"
                     "Helm for MPD.
 
 This is a mixture of `helm-mpd-current-playlist', `helm-mpd-library',
