@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-22 01:57:27 tuemura>
+;; Time-stamp: <2016-03-22 02:04:29 tuemura>
 ;;
 ;;; Code:
 
@@ -79,6 +79,11 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
     (insert (format "%S" c) "\n")))
 
 ;;;; Songs
+
+(defface helm-mpd-state-face
+  '((t (:inherit bold)))
+  "State face."
+  :group 'helm-mpd)
 
 (defface helm-mpd-artist-face
   '((t (:inherit font-lock-keyword-face)))
@@ -499,7 +504,7 @@ This is a mixture of `helm-mpd-current-playlist', `helm-mpd-library',
                "%M:%S")))
     (format-time-string fmt `(0 ,time 0 0))))
 
-(setq helm-mpd-mode-line-format
+(defvar helm-mpd-mode-line-format
       '(""
         (:propertize (:eval (let ((state (cdr (assq 'state helm-mpd-mode-line-data))))
                               (cond ((equal state "play")
@@ -509,7 +514,7 @@ This is a mixture of `helm-mpd-current-playlist', `helm-mpd-library',
                                     ((equal state "stop")
                                      "Stopped: ")
                                     (t "Unknown state: "))))
-                     face bold)
+                     face helm-mpd-state-face)
         (:propertize (:eval (cdr (assq 'Artist helm-mpd-mode-line-data)))
                      face helm-mpd-artist-face)
         " "
