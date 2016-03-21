@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-21 01:53:28 tuemura>
+;; Time-stamp: <2016-03-22 01:40:29 tuemura>
 ;;
 ;;; Code:
 
@@ -69,13 +69,14 @@
                 (goto-char (point-max))
                 (insert text))
               (when (helm-mpdlib-received-p)
-                (apply callback cbarg)))))))))
+                (apply callback proc cbarg)))))))))
 
 (defun helm-mpdlib-send (host port str callback &optional cbarg &key output-buffer)
   "Send STR to HOST on PORT and CALLBACK with CBARG when finished.
 
 CALLBACK is called when the response has been completely retrieved,
 with the current buffer containing the response.
+CALLBACK is used of the form `(apply CALLBACK PROC CBARG)'.
 
 If STR is a list of strings, send them sequentially."
   (setq output-buffer (or output-buffer (generate-new-buffer-name "*helm-mpdlib-output*")))
@@ -118,6 +119,14 @@ If STR is a list of strings, send them sequentially."
   (let ((res (helm-mpdlib-read-response)))
     (when (eq (cdr (assq :status res)) :ok)
       (helm-mpdlib-split (cdr (assq :data res)) separators))))
+
+(defun helm-mpdlib-parse-time (str)
+  "Parse a time of the form \"CURRENT:TOTAL\".
+
+Return the cons cell `(CURRENT . TOTAL)'."
+  (when (string-match "^\\(.*\\):\\(.*\\)$" str)
+    (cons (string-to-number (match-string 1 str))
+          (string-to-number (match-string 2 str)))))
 
 (provide 'helm-mpdlib)
 

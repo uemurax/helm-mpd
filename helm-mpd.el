@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-21 23:38:54 tuemura>
+;; Time-stamp: <2016-03-22 01:57:27 tuemura>
 ;;
 ;;; Code:
 
@@ -95,6 +95,11 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
   "Album face."
   :group 'helm-mpd)
 
+(defface helm-mpd-time-face
+  '((t (:inherit font-lock-builtin-face)))
+  "Time face."
+  :group 'helm-mpd)
+
 (defcustom helm-mpd-song-format
   (lambda (song)
     (mapconcat (lambda (x)
@@ -173,7 +178,7 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
          (defun ,retrieve ()
            (let ((,buf-var ,buf))
              (helm-mpd-send (helm-mpdlib-make-command ',command)
-                            (lambda ()
+                            (lambda (&rest _ignore)
                               (while (helm-mpdlib-received-p)
                                 (setq ,candidates
                                       (cons t ,form)))
@@ -220,6 +225,9 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
 (defclass helm-source-mpd-songs (helm-source-mpd-base)
   ((match :initform '(helm-mpd-songs-match-function))
    (real-to-display :initform 'helm-mpd-display-song)))
+
+(defvar helm-source-mpd-after-init-hook nil)
+(add-hook 'helm-source-mpd-after-init-hook 'helm-mpd-mode-line-update)
 
 ;;;;; Current playlist
 
@@ -284,7 +292,8 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
   (interactive (helm-mpd-interactive-host-and-port))
   (let ((helm-mpd-host host)
         (helm-mpd-port port))
-    (run-helm (current-playlist)
+    (run-helm ((current-playlist nil
+                                 :after-init-hook 'helm-source-mpd-after-init-hook))
               :buffer "*helm-mpd-current-playlist*")))
 
 ;;;;; Libraries
@@ -318,7 +327,8 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
   (interactive (helm-mpd-interactive-host-and-port))
   (let ((helm-mpd-host host)
         (helm-mpd-port port))
-    (run-helm (library)
+    (run-helm ((library nil
+                        :after-init-hook 'helm-source-mpd-after-init-hook))
               :buffer "*helm-mpd-library*")))
 
 ;;;;; Play lists
@@ -409,7 +419,8 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
   (interactive (helm-mpd-interactive-host-and-port))
   (let ((helm-mpd-host host)
         (helm-mpd-port port))
-    (run-helm (playlist)
+    (run-helm ((playlist nil
+                         :after-init-hook 'helm-source-mpd-after-init-hook))
               :buffer "*helm-mpd-playlist*")))
 
 (defun helm-mpd-new-playlist-save (name)
@@ -428,15 +439,6 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
                                            (list helm-pattern))
          args))
 
-;;;###autoload
-(defun helm-mpd-new-playlist (host port)
-  "Helm for new MPD playlist."
-  (interactive (helm-mpd-interactive-host-and-port))
-  (let ((helm-mpd-host host)
-        (helm-mpd-port port))
-    (run-helm (new-playlist)
-              :buffer "*helm-mpd-new-playlist*")))
-
 ;;;;; Put together
 
 ;;;###autoload
@@ -448,8 +450,93 @@ This is a mixture of `helm-mpd-current-playlist', `helm-mpd-library',
   (interactive (helm-mpd-interactive-host-and-port))
   (let ((helm-mpd-host host)
         (helm-mpd-port port))
-    (run-helm (current-playlist library playlist new-playlist)
+    (run-helm ((current-playlist nil
+                                 :after-init-hook 'helm-source-mpd-after-init-hook)
+               library playlist new-playlist)
               :buffer "*helm-mpd*")))
+
+;;;; Mode line
+
+(defvar helm-mpd-mode-line-data nil)
+
+(defun helm-mpd-mode-line-data-update (key value)
+  "Update a value of `helm-mpd-mode-line-data'."
+  (let ((c (assq key helm-mpd-mode-line-data)))
+    (if c
+        (setcdr c value)
+      (setq helm-mpd-mode-line-data
+            (cons (cons key value) helm-mpd-mode-line-data)))))
+
+(defun helm-mpd-mode-line-update-callback (proc)
+  (while (helm-mpdlib-received-p)
+    (let ((res (cdr (assq :data (helm-mpdlib-read-response)))))
+      (mapc (lambda (x)
+              (helm-mpd-mode-line-data-update (car x) (cdr x)))
+            res)
+      (when (assq 'song res)            ;response for `status'
+        (process-send-string proc
+                             (helm-mpdlib-make-command 'playlistinfo
+                                                       (cdr (assq 'song res)))))))
+  (condition-case e
+      (with-helm-buffer
+        (force-mode-line-update))
+    (error nil)))
+
+(defun helm-mpd-mode-line-update ()
+  (condition-case e
+      (with-helm-buffer
+        (let ((buf "*helm-mpd-mode-line-output*"))
+          (helm-mpd-send (list (helm-mpdlib-make-command 'status)
+                               (helm-mpdlib-make-command 'stats))
+                         #'helm-mpd-mode-line-update-callback
+                         nil :output-buffer buf))
+        (run-with-timer 1 nil #'helm-mpd-mode-line-update))
+    (error nil)))
+
+(defun helm-mpd-format-time (time)
+  (let ((fmt (if (>= time 3600)         ;more than or equal to 1 hour
+                 "%H:%M:%S"
+               "%M:%S")))
+    (format-time-string fmt `(0 ,time 0 0))))
+
+(setq helm-mpd-mode-line-format
+      '(""
+        (:propertize (:eval (let ((state (cdr (assq 'state helm-mpd-mode-line-data))))
+                              (cond ((equal state "play")
+                                     "Playing: ")
+                                    ((equal state "pause")
+                                     "Paused: ")
+                                    ((equal state "stop")
+                                     "Stopped: ")
+                                    (t "Unknown state: "))))
+                     face bold)
+        (:propertize (:eval (cdr (assq 'Artist helm-mpd-mode-line-data)))
+                     face helm-mpd-artist-face)
+        " "
+        (:propertize (:eval (cdr (assq 'Title helm-mpd-mode-line-data)))
+                     face helm-mpd-title-face)
+        " "
+        (:propertize (:eval (cdr (assq 'Album helm-mpd-mode-line-data)))
+                     face helm-mpd-album-face)
+        " "
+        (:eval (let ((x (cdr (assq 'time helm-mpd-mode-line-data))))
+                 (when x
+                   (let ((y (helm-mpdlib-parse-time x)))
+                     (when y
+                       `((:propertize ,(helm-mpd-format-time (car y))
+                                      face helm-mpd-time-face)
+                         "/"
+                         (:propertize ,(helm-mpd-format-time (cdr y))
+                                      face helm-mpd-time-face)))))))))
+
+(defun helm-mpd-display-mode-line-ad (source &optional force)
+  "Advice for `helm-display-mode-line'."
+  (when (helm-source-mpd-p source)
+    (setq mode-line-format helm-mpd-mode-line-format)
+    (when force
+      (force-mode-line-update))))
+
+(advice-add 'helm-display-mode-line :after 'helm-mpd-display-mode-line-ad)
 
 (provide 'helm-mpd)
 
