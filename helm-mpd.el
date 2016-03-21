@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-22 02:04:29 tuemura>
+;; Time-stamp: <2016-03-22 02:15:34 tuemura>
 ;;
 ;;; Code:
 
@@ -462,6 +462,11 @@ This is a mixture of `helm-mpd-current-playlist', `helm-mpd-library',
 
 ;;;; Mode line
 
+(defcustom helm-mpd-fancy-mode-line t
+  "If non-nil, display the current playback info in the mode line of the helm buffer."
+  :group 'helm-mpd
+  :type 'boolean)
+
 (defvar helm-mpd-mode-line-data nil)
 
 (defun helm-mpd-mode-line-data-update (key value)
@@ -488,15 +493,16 @@ This is a mixture of `helm-mpd-current-playlist', `helm-mpd-library',
     (error nil)))
 
 (defun helm-mpd-mode-line-update ()
-  (condition-case e
-      (with-helm-buffer
-        (let ((buf "*helm-mpd-mode-line-output*"))
-          (helm-mpd-send (list (helm-mpdlib-make-command 'status)
-                               (helm-mpdlib-make-command 'stats))
-                         #'helm-mpd-mode-line-update-callback
-                         nil :output-buffer buf))
-        (run-with-timer 1 nil #'helm-mpd-mode-line-update))
-    (error nil)))
+  (when helm-mpd-fancy-mode-line
+    (condition-case e
+        (with-helm-buffer
+          (let ((buf "*helm-mpd-mode-line-output*"))
+            (helm-mpd-send (list (helm-mpdlib-make-command 'status)
+                                 (helm-mpdlib-make-command 'stats))
+                           #'helm-mpd-mode-line-update-callback
+                           nil :output-buffer buf))
+          (run-with-timer 1 nil #'helm-mpd-mode-line-update))
+      (error nil))))
 
 (defun helm-mpd-format-time (time)
   (let ((fmt (if (>= time 3600)         ;more than or equal to 1 hour
@@ -504,39 +510,42 @@ This is a mixture of `helm-mpd-current-playlist', `helm-mpd-library',
                "%M:%S")))
     (format-time-string fmt `(0 ,time 0 0))))
 
-(defvar helm-mpd-mode-line-format
-      '(""
-        (:propertize (:eval (let ((state (cdr (assq 'state helm-mpd-mode-line-data))))
-                              (cond ((equal state "play")
-                                     "Playing: ")
-                                    ((equal state "pause")
-                                     "Paused: ")
-                                    ((equal state "stop")
-                                     "Stopped: ")
-                                    (t "Unknown state: "))))
-                     face helm-mpd-state-face)
-        (:propertize (:eval (cdr (assq 'Artist helm-mpd-mode-line-data)))
-                     face helm-mpd-artist-face)
-        " "
-        (:propertize (:eval (cdr (assq 'Title helm-mpd-mode-line-data)))
-                     face helm-mpd-title-face)
-        " "
-        (:propertize (:eval (cdr (assq 'Album helm-mpd-mode-line-data)))
-                     face helm-mpd-album-face)
-        " "
-        (:eval (let ((x (cdr (assq 'time helm-mpd-mode-line-data))))
-                 (when x
-                   (let ((y (helm-mpdlib-parse-time x)))
-                     (when y
-                       `((:propertize ,(helm-mpd-format-time (car y))
-                                      face helm-mpd-time-face)
-                         "/"
-                         (:propertize ,(helm-mpd-format-time (cdr y))
-                                      face helm-mpd-time-face)))))))))
+(defcustom helm-mpd-mode-line-format
+  '(""
+    (:propertize (:eval (let ((state (cdr (assq 'state helm-mpd-mode-line-data))))
+                          (cond ((equal state "play")
+                                 "Playing: ")
+                                ((equal state "pause")
+                                 "Paused: ")
+                                ((equal state "stop")
+                                 "Stopped: ")
+                                (t "Unknown state: "))))
+                 face helm-mpd-state-face)
+    (:propertize (:eval (cdr (assq 'Artist helm-mpd-mode-line-data)))
+                 face helm-mpd-artist-face)
+    " "
+    (:propertize (:eval (cdr (assq 'Title helm-mpd-mode-line-data)))
+                 face helm-mpd-title-face)
+    " "
+    (:propertize (:eval (cdr (assq 'Album helm-mpd-mode-line-data)))
+                 face helm-mpd-album-face)
+    " "
+    (:eval (let ((x (cdr (assq 'time helm-mpd-mode-line-data))))
+             (when x
+               (let ((y (helm-mpdlib-parse-time x)))
+                 (when y
+                   `((:propertize ,(helm-mpd-format-time (car y))
+                                  face helm-mpd-time-face)
+                     "/"
+                     (:propertize ,(helm-mpd-format-time (cdr y))
+                                  face helm-mpd-time-face))))))))
+  "Mode line format in `helm-mpd'."
+  :group 'helm-mpd
+  :type 'sexp)
 
 (defun helm-mpd-display-mode-line-ad (source &optional force)
   "Advice for `helm-display-mode-line'."
-  (when (helm-source-mpd-p source)
+  (when (and helm-mpd-fancy-mode-line (helm-source-mpd-p source))
     (setq mode-line-format helm-mpd-mode-line-format)
     (when force
       (force-mode-line-update))))
