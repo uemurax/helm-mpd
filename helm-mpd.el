@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-22 08:02:05 tuemura>
+;; Time-stamp: <2016-03-22 15:58:35 tuemura>
 ;;
 ;;; Code:
 
@@ -240,10 +240,10 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
            (setq ,name-var (or ,name-var ,source-name))
            (apply #'helm-make-source ,name-var ',class
                   :candidates (lambda ()
-                                (if (car ,candidates)
-                                    (setcar ,candidates nil)
+                                (unless (car ,candidates)
                                   (,retrieve))
                                 (cdr ,candidates))
+                  :update (lambda () (setcar ,candidates nil))
                   ,@args
                   ,args-var)))))
 
@@ -285,7 +285,8 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
 
 (defclass helm-source-mpd-songs (helm-source-mpd-base)
   ((match :initform '(helm-mpd-songs-match-function))
-   (real-to-display :initform 'helm-mpd-display-song)))
+   (real-to-display :initform 'helm-mpd-display-song)
+   (volatile :initform t)))
 
 (defvar helm-source-mpd-after-init-hook nil)
 (add-hook 'helm-source-mpd-after-init-hook 'helm-mpd-mode-line-update)
