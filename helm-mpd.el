@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-23 21:01:59 tuemura>
+;; Time-stamp: <2016-03-23 21:41:32 tuemura>
 ;;
 ;;; Code:
 
@@ -163,32 +163,32 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
   :group 'helm-mpd
   :type 'function)
 
+(defvar helm-mpd-song-match-filters
+  '(("f" . file)
+    ("a" . Artist)
+    ("t" . Title)
+    ("b" . Album)
+    ("y" . Date)
+    ("n" . Track)
+    ("g" . Genre)))
+
 (defun helm-mpd-song--match-pattern (p song)
   (let ((mfn (if helm-migemo-mode
                  #'helm-mm-migemo-string-match
                #'string-match)))
-    (if (string-match "^%\\(.\\)\\(.*\\)$" p)
-        (let ((lead (match-string 1 p))
-              (q (match-string 2 p))
-              (key nil))
-          (cond ((equal lead "f")
-                 (setq key 'file))
-                ((equal lead "a")
-                 (setq key 'Artist))
-                ((equal lead "t")
-                 (setq key 'Title))
-                ((equal lead "b")
-                 (setq key 'Album))
-                ((equal lead "y")
-                 (setq key 'Date))
-                ((equal lead "n")
-                 (setq key 'Track))
-                ((equal lead "g")
-                 (setq key 'Genre)))
-          (when (and key (assq key song))
-            (funcall mfn q (cdr (assq key song)))))
-      (cl-loop for v in song
-               thereis (funcall mfn p (cdr v))))))
+    (cl-labels ((default (x)
+                  (cl-loop for v in song
+                           thereis (funcall mfn x (cdr v)))))
+      (if (string-match "^%\\(.\\)\\(.*\\)$" p)
+          (let* ((lead (match-string 1 p))
+                 (q (match-string 2 p))
+                 (key (cdr (assoc lead helm-mpd-song-match-filters))))
+            (if key
+                (let ((s (cdr (assq key song))))
+                  (when s
+                    (funcall mfn q s)))
+              (default (concat lead q))))
+        (default p)))))
 
 (defun helm-mpd-songs-match-function (candidate)
   (let ((song (get-text-property 0 :real-value candidate)))
