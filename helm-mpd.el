@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-22 15:58:35 tuemura>
+;; Time-stamp: <2016-03-23 21:01:59 tuemura>
 ;;
 ;;; Code:
 
@@ -213,7 +213,7 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
 ;;;; Sources
 
 (eval-when-compile
-  (defmacro defsource (name command form class &rest args)
+  (defmacro defsource (name command form class &optional args)
     (let* ((candidates (intern (format "helm-mpd-%s-candidates" name)))
            (source (intern (format "helm-mpd-%s-source" name)))
            (retrieve (intern (format "helm-mpd-%s-retrieve" name)))
@@ -244,8 +244,8 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
                                   (,retrieve))
                                 (cdr ,candidates))
                   :update (lambda () (setcar ,candidates nil))
-                  ,@args
-                  ,args-var)))))
+                  (append ,args
+                          ,args-var))))))
 
   (defmacro run-helm (sources &rest args)
     (let ((let-vars (mapcar (lambda (s)
@@ -291,6 +291,71 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
 (defvar helm-source-mpd-after-init-hook nil)
 (add-hook 'helm-source-mpd-after-init-hook 'helm-mpd-mode-line-update)
 
+(defvar helm-mpd-keys
+  '((delete :key "M-D" :key-persistent "C-c d")
+    (raw-data :key "C-c RET" :key-persistent "C-c C-j")
+    (list :key "M-L" :key-persistent "C-c l")
+    (info :key "M-I" :key-persistent "C-c i")
+    (rename :key "M-R")))
+
+(defun helm-mpd-make-actions (arg)
+  "Make helm actions from ARG.
+
+ARG must be a list of PLISTs.
+
+Each PLIST can have properties `:action', `:type', `:key' and `:key-persistent'.
+
+The value of `:action' must be either nil or `(DISPLAY . ACTION)'.
+ACTION is passed to `helm-mpd-action'.
+If DISPLAY contains the string \"(s)\", ACTION is executed on marked candidates.
+
+The value of `:type' must be a symbol.
+If the value is in `helm-mpd-keys', defines keys for ACTION and persistent ACTION.
+
+The value of `:key' or `:key-persistent' must be either nil or `(KEY . ACTION)'.
+KEY must be a string passed to `kbd' function.
+They overwrite keymaps defined by `:type'.
+
+The return value is a plist which has `:action' and `:keymap' properties."
+  (do ((lst arg (cdr lst))
+       (actions nil actions)
+       (keymap (let ((m (make-sparse-keymap)))
+                 (set-keymap-parent m helm-map)
+                 m)
+               keymap))
+      ((null lst) (list :action (reverse actions)
+                        :keymap keymap))
+    (let* ((x (car lst))
+           (action (plist-get x :action))
+           (type (plist-get x :type))
+           (key (plist-get x :key))
+           (key-persistent (plist-get x :key-persistent)))
+      (when action
+        (let* ((disp (car action))
+               (act0 (cdr action))
+               (keys (cdr (assq type helm-mpd-keys)))
+               (on-marked (string-match "(s)" disp)))
+          (setq key (or key
+                        (let ((k (plist-get keys :key)))
+                          (when k
+                            (cons k (helm-mpd-action act0 on-marked t))))))
+          (setq key-persistent (or key-persistent
+                                   (let ((k (plist-get keys :key-persistent)))
+                                     (when k
+                                       (cons k (helm-mpd-action act0 on-marked 'persistent))))))
+          (setq actions
+                (cons (cons (apply #'concat disp
+                                   `(,@(when key
+                                         `(" `" ,(car key) "'"))
+                                     ,@(when key-persistent
+                                         `(" `" ,(car key-persistent) " (keeping session)'"))))
+                            (helm-mpd-action act0 on-marked))
+                      actions))))
+      (when key
+        (define-key keymap (kbd (car key)) (cdr key)))
+      (when key-persistent
+        (define-key keymap (kbd (car key-persistent)) (cdr key-persistent))))))
+
 ;;;;; Current playlist
 
 (defun helm-mpd-current-playlist-play (song)
@@ -324,29 +389,17 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
 (put 'helm-mpd-current-playlist-move 'helm-only t)
 
 (defvar helm-mpd-current-playlist-actions
-  (helm-make-actions
-   "Play song" (helm-mpd-action 'helm-mpd-current-playlist-play)
-   "Delete song(s)" (helm-mpd-action 'helm-mpd-current-playlist-delete t)
-   "Show raw data(s)" (helm-mpd-action 'helm-mpd-show-raw-data t))
-  "Actions for `helm-mpd-current-playlist'.")
-
-(defvar helm-mpd-current-playlist-map
-  (let ((m (make-sparse-keymap)))
-    (set-keymap-parent m helm-map)
-    (dolist (v `(("M-D" . ,(helm-mpd-action 'helm-mpd-current-playlist-delete t t))
-                 ("C-c d" . ,(helm-mpd-action 'helm-mpd-current-playlist-delete t 'persistent))
-                 ("C-c RET" . ,(helm-mpd-action 'helm-mpd-show-raw-data t t))
-                 ("C-c C-j" . ,(helm-mpd-action 'helm-mpd-show-raw-data t 'persistent))
-                 ("M-g g" . helm-mpd-current-playlist-move)))
-      (define-key m (kbd (car v)) (cdr v)))
-    m)
-  "Keymap for `helm-mpd-current-playlist'.")
+  `((:action ("Play song" . helm-mpd-current-playlist-play))
+    (:action ("Delete song(s)" . helm-mpd-current-playlist-delete)
+             :type delete)
+    (:action ("Show raw data(s)" . helm-mpd-show-raw-data)
+             :type raw-data)
+    (:key-persistent ("M-g g" . helm-mpd-current-playlist-move))))
 
 (defsource current-playlist playlistinfo
   (helm-mpdlib-read-objects '(file))
   helm-source-mpd-songs
-  :action 'helm-mpd-current-playlist-actions
-  :keymap helm-mpd-current-playlist-map)
+  (helm-mpd-make-actions helm-mpd-current-playlist-actions))
 
 (defcommand helm-mpd-current-playlist
   (run-helm ((current-playlist nil
@@ -356,27 +409,16 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
 ;;;;; Libraries
 
 (defvar helm-mpd-library-actions
-  (helm-make-actions
-   "Enqueue song(s)" (helm-mpd-action 'helm-mpd-songs-enqueue t)
-   "Show raw data(s)" (helm-mpd-action 'helm-mpd-show-raw-data t))
-  "Actions for `helm-mpd-library'.")
-
-(defvar helm-mpd-library-map
-  (let ((m (make-sparse-keymap)))
-    (set-keymap-parent m helm-map)
-    (dolist (v `(("C-c RET" . ,(helm-mpd-action 'helm-mpd-show-raw-data t t))
-                 ("C-c C-j" . ,(helm-mpd-action 'helm-mpd-show-raw-data t 'persistent))))
-      (define-key m (kbd (car v)) (cdr v)))
-    m)
-  "Keymap for `helm-mpd-library'.")
+  '((:action ("Enqueue song(s)" . helm-mpd-songs-enqueue))
+    (:action ("Show raw data(s)" . helm-mpd-show-raw-data)
+             :type raw-data)))
 
 (defsource library listallinfo
   (cl-loop for x in (helm-mpdlib-read-objects '(file directory playlist))
            when (assq 'file x)
            collect x)
   helm-source-mpd-songs
-  :action 'helm-mpd-library-actions
-  :keymap helm-mpd-library-map)
+  (helm-mpd-make-actions helm-mpd-library-actions))
 
 (defcommand helm-mpd-library
   (run-helm ((library nil
@@ -430,40 +472,26 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
                    #'ignore nil :buffer buf)))
 
 (defvar helm-mpd-playlist-actions
-  (helm-make-actions
-   "Load playlist(s)" (helm-mpd-action 'helm-mpd-playlist-load t)
-   "List playlist(s)" (helm-mpd-action 'helm-mpd-playlist-list t)
-   "Show playlist(s) info" (helm-mpd-action 'helm-mpd-playlist-info t)
-   "Remove playlist(s)" (helm-mpd-action 'helm-mpd-playlist-remove t)
-   "Rename playlist" (helm-mpd-action 'helm-mpd-playlist-rename)
-   "Show raw data(s)" (helm-mpd-action 'helm-mpd-show-raw-data t))
-  "Actions for `helm-mpd-playlist'.")
-
-(defvar helm-mpd-playlist-map
-  (let ((m (make-sparse-keymap)))
-    (set-keymap-parent m helm-map)
-    (dolist (v `(("M-D" . ,(helm-mpd-action 'helm-mpd-playlist-remove t t))
-                 ("C-c d" . ,(helm-mpd-action 'helm-mpd-playlist-remove t 'persistent))
-                 ("M-L" . ,(helm-mpd-action 'helm-mpd-playlist-list t t))
-                 ("C-c l" . ,(helm-mpd-action 'helm-mpd-playlist-list t 'persistent))
-                 ("M-I" . ,(helm-mpd-action 'helm-mpd-playlist-info t t))
-                 ("C-c i" . ,(helm-mpd-action 'helm-mpd-playlist-info t 'persistent))
-                 ("M-R" . ,(helm-mpd-action 'helm-mpd-playlist-rename t t))
-                 ("C-c RET" . ,(helm-mpd-action 'helm-mpd-show-raw-data t t))
-                 ("C-c C-j" . ,(helm-mpd-action 'helm-mpd-show-raw-data t 'persistent))))
-      (define-key m (kbd (car v)) (cdr v)))
-    m)
-  "Keymap for `helm-mpd-playlist'.")
+  '((:action ("Load playlist(s)" . helm-mpd-playlist-load))
+    (:action ("List playlist(s)" . helm-mpd-playlist-list)
+             :type list)
+    (:action ("Show playlist(s)' info" . helm-mpd-playlist-info)
+             :type info)
+    (:action ("Remove playlist(s)" . helm-mpd-playlist-remove)
+             :type delete)
+    (:action ("Rename playlist" . helm-mpd-playlist-rename)
+             :type rename)
+    (:action ("Show raw data(s)" . helm-mpd-show-raw-data)
+             :type raw-data)))
 
 (defsource playlist listplaylists
   (cl-loop for x in (helm-mpdlib-read-objects '(playlist))
            when (assq 'playlist x)
            collect x)
   helm-source-mpd-base
-  :real-to-display (lambda (c)
-                     (cdr (assq 'playlist c)))
-  :action 'helm-mpd-playlist-actions
-  :keymap helm-mpd-playlist-map)
+  `(:real-to-display (lambda (c)
+                       (cdr (assq 'playlist c)))
+                     ,@(helm-mpd-make-actions helm-mpd-playlist-actions)))
 
 (defcommand helm-mpd-playlist
   (run-helm ((playlist nil
