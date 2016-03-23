@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-23 21:41:32 tuemura>
+;; Time-stamp: <2016-03-23 23:39:12 tuemura>
 ;;
 ;;; Code:
 
@@ -283,10 +283,37 @@ If COMMAND is the simbol `persistent', the function does not exit helm session."
 (defun helm-source-mpd-p (source)
   (assq 'is-mpd-source source))
 
+(defvar helm-source-mpd-songs-help-message
+  "* Helm MPD songs
+
+** Completion
+
+*** Search by tag
+
+If you enter a pattern prefixed by \"%CHARACTER\" helm will search for songs
+by the tag specified by CHARACTER. The alist `helm-mpd-song-match-filters'
+determines which character specifies a tag.
+
+*** Examples
+
+if I enter in pattern prompt:
+
+    %abeatle
+
+helm will search for songs in whose artist name \"beatle\" matches.
+
+if I enter in pattern prompt:
+
+    %tsmoke %adeep
+
+helm will search for songs in whose title \"smoke\" matches and in whose artist
+name \"deep\" matches.")
+
 (defclass helm-source-mpd-songs (helm-source-mpd-base)
   ((match :initform '(helm-mpd-songs-match-function))
    (real-to-display :initform 'helm-mpd-display-song)
-   (volatile :initform t)))
+   (volatile :initform t)
+   (help-message :initform 'helm-source-mpd-songs-help-message)))
 
 (defvar helm-source-mpd-after-init-hook nil)
 (add-hook 'helm-source-mpd-after-init-hook 'helm-mpd-mode-line-update)
