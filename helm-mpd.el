@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-23 23:39:12 tuemura>
+;; Time-stamp: <2016-03-24 19:57:05 tuemura>
 ;;
 ;;; Code:
 
@@ -541,12 +541,39 @@ The return value is a plist which has `:action' and `:keymap' properties."
                                            (list helm-pattern))
          args))
 
+;;;;; Command
+
+(defun helm-mpd-command-send (command)
+  (let ((buf "*helm-mpd-send-command-output*")
+        (args (read-string "Arguments: ")))
+    (switch-to-buffer buf)
+    (erase-buffer)
+    (helm-mpd-send (helm-mpdlib-make-command command args)
+                   #'ignore nil
+                   :buffer buf)))
+
+(defvar helm-mpd-command-actions
+  '((:action ("Send command" . helm-mpd-command-send))))
+
+(defsource command commands
+  (cl-loop for x in (cdr (assq :data (helm-mpdlib-read-response)))
+           collect (cdr x))
+  helm-source-mpd-base
+  `(:persistent-action ignore
+                       :persistent-help "Do nothing"
+                       ,@(helm-mpd-make-actions helm-mpd-command-actions)))
+
+(defcommand helm-mpd-command
+  (run-helm ((command nil
+                      :after-init-hook 'helm-source-mpd-after-init-hook))
+            :buffer "*helm-mpd-commands*"))
+
 ;;;;; Put together
 
 (defcommand helm-mpd
   (run-helm ((current-playlist nil
                                :after-init-hook 'helm-source-mpd-after-init-hook)
-             library playlist new-playlist)
+             library playlist new-playlist command)
             :buffer "*helm-mpd*"))
 
 ;;;; Mode line

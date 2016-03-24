@@ -11,6 +11,8 @@
                     "Helm for library." t)
                   (autoload 'helm-mpd-playlist "helm-mpd"
                     "Helm for playlists." t)
+                  (autoload 'helm-mpd-command "helm-mpd"
+                    "Helm for MPD commands." t)
                   (autoload 'helm-mpd "helm-mpd"
                     "Helm for MPD.
 
