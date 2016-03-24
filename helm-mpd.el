@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-24 20:08:09 tuemura>
+;; Time-stamp: <2016-03-24 21:00:44 tuemura>
 ;;
 ;;; Code:
 
@@ -552,15 +552,20 @@ The return value is a plist which has `:action' and `:keymap' properties."
                    #'ignore nil
                    :buffer buf)))
 
+(defun helm-mpd-command-browse-help (command)
+  "Browse COMMAND help on `eww'."
+  (eww (gethash (format "%s" command) helm-mpd-command-help-paths)))
+
 (defvar helm-mpd-command-actions
-  '((:action ("Send command" . helm-mpd-command-send))))
+  '((:action ("Send command" . helm-mpd-command-send))
+    (:action ("Browse command help" . helm-mpd-command-browse-help))))
 
 (defsource command commands
   (cl-loop for x in (cdr (assq :data (helm-mpdlib-read-response)))
            collect (cdr x))
   helm-source-mpd-base
-  `(:persistent-action ignore
-                       :persistent-help "Do nothing"
+  `(:persistent-action helm-mpd-command-browse-help
+                       :persistent-help "Browse help"
                        ,@(helm-mpd-make-actions helm-mpd-command-actions)))
 
 (defcommand helm-mpd-command
@@ -676,6 +681,113 @@ The return value is a plist which has `:action' and `:keymap' properties."
       (force-mode-line-update))))
 
 (advice-add 'helm-display-mode-line :after 'helm-mpd-display-mode-line-ad)
+
+;;;; Misc
+
+(defvar helm-mpd-command-help-paths
+  (let ((m (make-hash-table :test 'equal))
+        (root "http://www.musicpd.org/doc/protocol/"))
+    (dolist (v '(("add" . "queue.html")
+                 ("addid" . "queue.html")
+                 ("addtagid" . "queue.html")
+                 ("channels" . "client_to_client.html")
+                 ("clear" . "queue.html")
+                 ("clearerror" . "command_reference.html")
+                 ("cleartagid" . "queue.html")
+                 ("close" . "connection_commands.html")
+                 ("commands" . "reflection_commands.html")
+                 ("config" . "reflection_commands.html")
+                 ("consume" . "playback_option_commands.html")
+                 ("count" . "database.html")
+                 ("crossfade" . "playback_option_commands.html")
+                 ("currentsong" . "command_reference.html")
+                 ("decoders" . "reflection_commands.html")
+                 ("delete" . "queue.html")
+                 ("deleteid" . "queue.html")
+                 ("disableoutput" . "output_commands.html")
+                 ("enableoutput" . "output_commands.html")
+                 ("find" . "database.html")
+                 ("findadd" . "database.html")
+                 ("idle" . "command_reference.html")
+                 ("kill" . "connection_commands.html")
+                 ("list" . "database.html")
+                 ("listall" . "database.html")
+                 ("listallinfo" . "database.html")
+                 ("listfiles" . "database.html")
+                 ("listmounts" . "mount.html")
+                 ("listplaylist" . "playlist_files.html")
+                 ("listplaylistinfo" . "playlist_files.html")
+                 ("listplaylists" . "playlist_files.html")
+                 ("load" . "playlist_files.html")
+                 ("lsinfo" . "database.html")
+                 ("mixrampdb" . "playback_option_commands.html")
+                 ("mixrampdelay" . "playback_option_commands.html")
+                 ("mount" . "mount.html")
+                 ("move" . "queue.html")
+                 ("moveid" . "queue.html")
+                 ("next" . "playback_commands.html")
+                 ("notcommands" . "reflection_commands.html")
+                 ("outputs" . "output_commands.html")
+                 ("password" . "connection_commands.html")
+                 ("pause" . "playback_commands.html")
+                 ("ping" . "connection_commands.html")
+                 ("play" . "playback_commands.html")
+                 ("playid" . "playback_commands.html")
+                 ("playlist" . "queue.html")
+                 ("playlistadd" . "playlist_files.html")
+                 ("playlistclear" . "playlist_files.html")
+                 ("playlistdelete" . "playlist_files.html")
+                 ("playlistfind" . "queue.html")
+                 ("playlistid" . "queue.html")
+                 ("playlistinfo" . "queue.html")
+                 ("playlistmove" . "playlist_files.html")
+                 ("playlistsearch" . "queue.html")
+                 ("plchanges" . "queue.html")
+                 ("plchangesposid" . "queue.html")
+                 ("previous" . "playback_commands.html")
+                 ("prio" . "queue.html")
+                 ("prioid" . "queue.html")
+                 ("random" . "playback_option_commands.html")
+                 ("rangeid" . "queue.html")
+                 ("readcomments" . "database.html")
+                 ("readmessages" . "client_to_client.html")
+                 ("rename" . "playlist_files.html")
+                 ("repeat" . "playback_option_commands.html")
+                 ("replay_gain_mode" . "playback_option_commands.html")
+                 ("replay_gain_status" . "playback_option_commands.html")
+                 ("rescan" . "database.html")
+                 ("rm" . "playlist_files.html")
+                 ("save" . "playlist_files.html")
+                 ("search" . "database.html")
+                 ("searchadd" . "database.html")
+                 ("searchaddpl" . "database.html")
+                 ("seek" . "playback_commands.html")
+                 ("seekcur" . "playback_commands.html")
+                 ("seekid" . "playback_commands.html")
+                 ("sendmessage" . "client_to_client.html")
+                 ("setvol" . "playback_option_commands.html")
+                 ("shuffle" . "queue.html")
+                 ("single" . "playback_option_commands.html")
+                 ("stats" . "command_reference.html")
+                 ("status" . "command_reference.html")
+                 ("stop" . "playback_commands.html")
+                 ("subscribe" . "client_to_client.html")
+                 ("swap" . "queue.html")
+                 ("swapid" . "queue.html")
+                 ("tagtypes" . "reflection_commands.html")
+                 ("toggleoutput" . "output_commands.html")
+                 ("unsubscribe" . "client_to_client.html")
+                 ("update" . "database.html")
+                 ("urlhandlers" . "reflection_commands.html")
+                 ("volume" . "playback_option_commands.html")))
+      (puthash (car v) (concat root
+                               (cdr v)
+                               "#command_"
+                               (car v))
+               m))
+    (puthash "sticker" (concat root "stickers.html") m)
+    (puthash "unmount" (concat root "mount.html" "#command_umount") m)
+    m))
 
 (provide 'helm-mpd)
 
