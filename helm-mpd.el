@@ -4,7 +4,7 @@
 ;;
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; License: GPL3
-;; Time-stamp: <2016-03-24 19:57:05 tuemura>
+;; Time-stamp: <2016-03-24 20:08:09 tuemura>
 ;;
 ;;; Code:
 
@@ -573,7 +573,7 @@ The return value is a plist which has `:action' and `:keymap' properties."
 (defcommand helm-mpd
   (run-helm ((current-playlist nil
                                :after-init-hook 'helm-source-mpd-after-init-hook)
-             library playlist new-playlist command)
+             library playlist command new-playlist)
             :buffer "*helm-mpd*"))
 
 ;;;; Mode line
