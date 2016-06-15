@@ -18,7 +18,9 @@
    (candidate-transformer :initform 'helm-mpd-songs-candidate-transformer)
    (mpd-host :initarg :mpd-host)
    (mpd-port :initarg :mpd-port)
-   (mpd-args :initarg :mpd-args)))
+   (mpd-args :initarg :mpd-args)
+   (mpd-filter :initarg :mpd-filter
+               :initform (lambda (pattern) "cat"))))
 
 (defvar helm-mpd-song-attributes
   '(artist album albumartist comment composer date disc genre performer
@@ -73,21 +75,34 @@
   (let* ((source (helm-get-current-source))
          (host (cdr (assq 'mpd-host source)))
          (port (cdr (assq 'mpd-port source)))
-         (args (cdr (assq 'mpd-args source))))
+         (args (cdr (assq 'mpd-args source)))
+         (filter (cdr (assq 'mpd-filter source))))
     (make-process :name "helm-mpd-song-process"
-                  :command (apply #'list
-                                  "mpc"
-                                  "-h" host
-                                  "-p" (format "%s" port)
-                                  "-f" (helm-mpd-song-format)
-                                  (funcall args helm-pattern)))))
+                  :command (list "sh" "-c"
+                                 (mapconcat 'identity
+                                            `("mpc"
+                                              "-h" ,host
+                                              "-p" ,(format "%s" port)
+                                              "-f" ,(format "'%s'" (helm-mpd-song-format))
+                                              ,(funcall args helm-pattern)
+                                              "|" ,(funcall filter helm-pattern))
+                                            " ")))))
 
 (defun helm-mpd-search-arguments (pattern)
-  (list "search" "any"
-        pattern))
+  (format "search any %S"
+          pattern))
 
 (defun helm-mpd-current-playlist-arguments (pattern)
-  (list "playlist"))
+  "playlist")
+
+(defun helm-mpd-current-playlist-filter (pattern)
+  (format "grep -i '%s'"
+          (mapconcat (lambda (attr)
+                       (concat (format helm-mpd-song-tag-begin attr)
+                               (format ".*%s.*" pattern)
+                               (format helm-mpd-song-tag-end attr)))
+                     helm-mpd-song-attributes
+                     "\\|")))
 
 (defcustom helm-mpd-default-host "localhost"
   "Default host."
@@ -106,14 +121,17 @@
                          (read-number "Port: " helm-mpd-default-port))
                  (list helm-mpd-default-host helm-mpd-default-port)))
   (helm :sources (mapcar (lambda (xs)
-                           (apply (lambda (name args)
-                                    (helm-make-source name 'helm-source-mpd-songs
-                                      :mpd-host host
-                                      :mpd-port port
-                                      :mpd-args args))
+                           (apply (lambda (name &rest kw)
+                                    (apply #'helm-make-source name 'helm-source-mpd-songs
+                                           :mpd-host host
+                                           :mpd-port port
+                                           kw))
                                   xs))
-                         '(("Current playlist" helm-mpd-current-playlist-arguments)
-                           ("MPD songs" helm-mpd-search-arguments)))
+                         '(("Current playlist"
+                            :mpd-args helm-mpd-current-playlist-arguments
+                            :mpd-filter helm-mpd-current-playlist-filter)
+                           ("MPD songs"
+                            :mpd-args helm-mpd-search-arguments)))
         :buffer "*helm-mpd*"))
 
 (provide 'helm-mpd)
