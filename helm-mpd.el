@@ -4,10 +4,12 @@
 ;;
 ;; Version: 0.1
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
-;; Package-Requires: ((helm "1"))
+;; Package-Requires: ((helm-core "1.9.7"))
 ;; License: GPL3
 ;;
 ;;; Code:
+
+(require 'helm)
 
 (defgroup helm-mpd ()
   "Predefined configurations for `helm-mpd'."
