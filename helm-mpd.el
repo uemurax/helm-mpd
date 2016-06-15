@@ -96,7 +96,7 @@
   "playlist")
 
 (defun helm-mpd-current-playlist-filter (pattern)
-  (format "grep -i '%s'"
+  (format "grep -i %S"
           (mapconcat (lambda (attr)
                        (concat (format helm-mpd-song-tag-begin attr)
                                (format ".*%s.*" pattern)
