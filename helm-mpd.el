@@ -32,17 +32,17 @@
 
 (defvar-local helm-mpd-local-process nil)
 
-(defun helm-mpd-make-process (host port args output-buffer)
-  (let ((proc (make-network-process :name "helm-mpd"
-                                    :buffer (generate-new-buffer "helm-mpd-process-temporary-output")
-                                    :host host
-                                    :service port
+(defun helm-mpd-make-process (cmd &optional output-buffer)
+  (let* ((proc-args (append (list :name "helm-mpd"
+                                  :host helm-mpd-host
+                                  :service helm-mpd-port)
+                            (when output-buffer
+                              (list :buffer (generate-new-buffer "helm-mpd-process-temporary-output")
                                     :filter 'helm-mpd-process-filter
-                                    :sentinel 'helm-mpd-process-sentinel)))
+                                    :sentinel 'helm-mpd-process-sentinel))))
+         (proc (apply #'make-network-process proc-args)))
     (process-put proc 'helm-mpd-buffer output-buffer)
-    (process-send-string proc
-                         (concat (mapconcat 'identity args " ")
-                                 "\n"))
+    (process-send-string proc (concat cmd "\n"))
     (process-send-eof proc)
     proc))
 
@@ -135,39 +135,90 @@
   :group 'helm-mpd
   :type 'alist)
 
+(defun helm-mpd-action-play (object)
+  (helm-mpd-make-process (format "playid %s"
+                                 (cdr (assq 'Id object)))))
+
+(defun helm-mpd-action-delete (_ignore)
+  (helm-mpd-make-process (concat "command_list_begin\n"
+                                 (mapconcat (lambda (c)
+                                              (format "deleteid %s"
+                                                      (cdr (assq 'Id c))))
+                                            (helm-marked-candidates)
+                                            "\n")
+                                 "\ncommand_list_end")))
+
+(defun helm-mpd-action-transformer-current-playlist (actions object)
+  (append actions
+          (when (assq 'Id object)
+            '(("Play song" . helm-mpd-action-play)
+              ("Delete song(s)" . helm-mpd-action-delete)))))
+
+(defun helm-mpd-action-add (_ignore)
+  (helm-mpd-make-process (concat "command_list_begin\n"
+                                 (mapconcat (lambda (c)
+                                              (format "add %s"
+                                                      (cdr (or (assq 'file c)
+                                                               (assq 'directory c)))))
+                                            (helm-marked-candidates)
+                                            "\n")
+                                 "\ncommand_list_end")))
+
+(defun helm-mpd-action-transformer-song (actions object)
+  (append actions
+          (when (or (assq 'file object) (assq 'directory object))
+            '(("Add song(s)" . helm-mpd-action-add)))))
+
+(defun helm-mpd-action-load (_ignore)
+  (helm-mpd-make-process (concat "command_list_begin\n"
+                                 (mapconcat (lambda (c)
+                                              (format "load %s"
+                                                      (cdr (assq 'playlist c))))
+                                            (helm-marked-candidates)
+                                            "\n")
+                                 "\ncommand_list_end")))
+
+(defun helm-mpd-action-transformer-playlist (actions object)
+  (append actions
+          (when (assq 'playlist object)
+            '(("Load playlist(s)" . helm-mpd-action-load)))))
+
 (defclass helm-source-mpd-base (helm-source-in-buffer)
   ((filtered-candidate-transformer :initform '(helm-mpd-filtered-candidate-transformer))
    (search :initform '(helm-mpd-search-function))
-   (action :initform 'helm-mpd-object-action)))
+   (action :initform 'helm-mpd-object-action)
+   (action-transformer :initform '(helm-mpd-action-transformer-current-playlist
+                                   helm-mpd-action-transformer-song
+                                   helm-mpd-action-transformer-playlist))))
 
-(defun helm-mpd-refresh-buffer (buffer args)
+(defun helm-mpd-refresh-buffer (buffer cmd)
   (with-current-buffer buffer
     (erase-buffer)
     (when (process-live-p helm-mpd-local-process)
       (delete-process helm-mpd-local-process))
     (setq helm-mpd-local-process
-          (helm-mpd-make-process helm-mpd-host helm-mpd-port args buffer))))
+          (helm-mpd-make-process cmd buffer))))
 
-(defmacro helm-mpd-defclass (name args)
+(defmacro helm-mpd-defclass (name cmd)
   (let ((cb-var (intern (format "helm-mpd-%s-candidate-buffer" name)))
         (cb-val (format "*helm-mpd-%s:candidates*" name))
         (cls (intern (format "helm-source-mpd-%s" name)))
-        (a-var (intern (format "helm-mpd-%s-arguments" name))))
+        (cmd-var (intern (format "helm-mpd-%s-command" name))))
     `(progn
        (defvar ,cb-var ,cb-val)
-       (defvar ,a-var ,args)
+       (defvar ,cmd-var ,cmd)
        (defclass ,cls (helm-source-mpd-base)
          ((init :initform (lambda ()
                             (let ((buf (helm-candidate-buffer (get-buffer-create ,cb-var))))
                               (when (with-current-buffer buf
                                       (= (length (buffer-string)) 0))
-                                (helm-mpd-refresh-buffer buf ,a-var)))))
+                                (helm-mpd-refresh-buffer buf ,cmd-var)))))
           (update :initform (lambda ()
-                              (helm-mpd-refresh-buffer (get-buffer-create ,cb-var) ,a-var))))))))
+                              (helm-mpd-refresh-buffer (get-buffer-create ,cb-var) ,cmd-var))))))))
 
-(helm-mpd-defclass current-playlist '("playlistinfo"))
-(helm-mpd-defclass songs '("listallinfo"))
-(helm-mpd-defclass playlists '("listplaylists"))
+(helm-mpd-defclass current-playlist "playlistinfo")
+(helm-mpd-defclass songs "listallinfo")
+(helm-mpd-defclass playlists "listplaylists")
 
 ;;;###autoload
 (defun helm-mpd ()
