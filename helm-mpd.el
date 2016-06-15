@@ -23,17 +23,6 @@
   :group 'helm-mpd
   :type 'number)
 
-(defclass helm-source-mpd-songs (helm-source-async)
-  ((candidates-process :initform 'helm-mpd-songs-candidates-process)
-   (candidate-transformer :initform '(helm-mpd-songs-candidate-transformer))
-   (action :initform 'helm-mpd-songs-action)
-   (action-transformer :initform '(helm-mpd-songs-action-transformer))
-   (mpd-args :initarg :mpd-args)
-   (mpd-filter :initarg :mpd-filter
-               :initform (lambda (pattern) "cat"))
-   (mpd-attrs :initarg :mpd-attrs
-              :initform (symbol-value 'helm-mpd-song-attributes))))
-
 (defvar helm-mpd-song-attributes
   '(artist album albumartist comment composer date disc genre performer
            title track time file position mtime mdate))
@@ -187,6 +176,17 @@
                                                (cdr (assq 'position song)))))
 
 ;;;; Entry point
+
+(defclass helm-source-mpd-songs (helm-source-async)
+  ((candidates-process :initform 'helm-mpd-songs-candidates-process)
+   (candidate-transformer :initform '(helm-mpd-songs-candidate-transformer))
+   (action :initform 'helm-mpd-songs-action)
+   (action-transformer :initform '(helm-mpd-songs-action-transformer))
+   (mpd-args :initarg :mpd-args)
+   (mpd-filter :initarg :mpd-filter
+               :initform (lambda (pattern) "cat"))
+   (mpd-attrs :initarg :mpd-attrs
+              :initform (symbol-value 'helm-mpd-song-attributes))))
 
 ;;;###autoload
 (defun helm-mpd (&optional host port)
