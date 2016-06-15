@@ -37,9 +37,11 @@
                                   :host helm-mpd-host
                                   :service helm-mpd-port)
                             (when output-buffer
-                              (list :buffer (generate-new-buffer "helm-mpd-process-temporary-output")
-                                    :filter 'helm-mpd-process-filter
-                                    :sentinel 'helm-mpd-process-sentinel))))
+                              (list :buffer (let ((b (get-buffer-create (format "%s-temporary-output" (buffer-name output-buffer)))))
+                                              (with-current-buffer b
+                                                (erase-buffer))
+                                              b)
+                                    :filter 'helm-mpd-process-filter))))
          (proc (apply #'make-network-process proc-args)))
     (process-put proc 'helm-mpd-buffer output-buffer)
     (process-send-string proc (concat cmd "\n"))
@@ -54,10 +56,6 @@
         (goto-char (point-max))
         (insert string))
       (helm-mpd-parse-response out-buf))))
-
-(defun helm-mpd-process-sentinel (proc string)
-  (cond ((string-match "^connection broken by remote peer" string)
-         (kill-buffer (process-buffer proc)))))
 
 (defun helm-mpd-parse-response (out-buf)
   (while (search-forward-regexp "^\\([^:\n]*\\): \\([^\n]*\\)\n" nil t)
