@@ -27,6 +27,9 @@
 
 (defvar helm-mpd-tag-begin "<%s>")
 (defvar helm-mpd-tag-end "</%s>")
+(defvar helm-mpd-any-tag-begin (format helm-mpd-tag-begin "[^/<>]*"))
+(defvar helm-mpd-any-tag-end (format helm-mpd-tag-end "[^<>]*"))
+(defvar helm-mpd-any-tag-format (concat helm-mpd-any-tag-begin "[^]*%s[^]*" helm-mpd-any-tag-end))
 (defvar helm-mpd-item-keywords '("file" "directory" "playlist"))
 (defvar helm-mpd-known-tags nil)
 
@@ -107,13 +110,12 @@
                         (> (length c) 0))
                       candidates)))
 
-(defun helm-mpd-search-function (regexp)
-  (re-search-forward (mapconcat (lambda (tag)
-                                  (concat (format helm-mpd-tag-begin tag)
-                                          ".*" regexp ".*"
-                                          (format helm-mpd-tag-end tag)))
-                                helm-mpd-known-tags "\\|")
-                     nil t))
+(defun helm-mpd-search-function (pattern)
+  (let ((regexp (if (and (boundp 'helm-migemo-mode) helm-migemo-mode)
+                    (helm-mm-migemo-get-pattern pattern)
+                  pattern)))
+    (re-search-forward (format helm-mpd-any-tag-format regexp)
+                       nil t)))
 
 (defvar helm-mpd--info-buffer "*helm-mpd-info*")
 
