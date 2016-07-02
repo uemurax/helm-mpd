@@ -255,7 +255,9 @@
          (file (helm-mpd-candidates-file cmd))
          (proc (get-process (helm-mpd-process-name cmd))))
     (when (process-live-p proc)
-      (delete-process proc))))
+      (delete-process proc))
+    (when (file-exists-p file)
+      (delete-file file))))
 
 (defclass helm-source-mpd-base (helm-source-async)
   ((filtered-candidate-transformer :initform '(helm-mpd-filtered-candidate-transformer))
