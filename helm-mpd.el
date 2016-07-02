@@ -37,6 +37,8 @@
                                   :host helm-mpd-host
                                   :service helm-mpd-port)
                             (when output-file
+                              (mkdir (file-name-directory output-file) t)
+                              (with-temp-file output-file)
                               (list :buffer (let ((b (get-buffer-create (format "helm-mpd-temporary-output:%s" cmd))))
                                               (with-current-buffer b
                                                 (erase-buffer))
@@ -46,15 +48,20 @@
          (proc (apply #'make-network-process proc-args)))
     (process-put proc 'helm-mpd-output-file output-file)
     (process-put proc 'helm-mpd-output-process output-proc)
+    (process-put proc 'helm-mpd-dummy-proc (make-process :name "helm-mpd-dummy-process"
+                                                         :command '("cat" "-")))
     (process-send-string proc (concat cmd "\n"))
     (process-send-eof proc)
     proc))
 
 (defun helm-mpd-process-sentinel (proc string)
   (cond ((string-match "^\\(connection broken\\|deleted\\|finished\\|killed\\|exited\\|failed\\)" string)
-         (let ((out-proc (process-get proc 'helm-mpd-output-process)))
+         (let((out-proc (process-get proc 'helm-mpd-output-process))
+              (dummy-proc (process-get proc 'helm-mpd-dummy-proc)))
            (when (process-live-p out-proc)
-             (process-send-eof out-proc))))))
+             (process-send-eof out-proc))
+           (when (process-live-p dummy-proc)
+             (process-send-eof dummy-proc))))))
 
 (defun helm-mpd-process-filter (proc string)
   (let ((buf (process-buffer proc))
@@ -79,10 +86,8 @@
                 (insert (format helm-mpd-tag-begin key)
                         value
                         (format helm-mpd-tag-end key)))))
-          (mkdir (file-name-directory output-file) t)
           (with-temp-file output-file
-            (when (file-exists-p output-file)
-              (forward-char (nth 1 (insert-file-contents output-file))))
+            (forward-char (nth 1 (insert-file-contents output-file)))
             (insert-buffer-substring buf))
           (when (process-live-p proc)
             (with-current-buffer buf
@@ -226,11 +231,16 @@
   (let* ((cmd (helm-attr 'mpd-command))
          (file (helm-mpd-candidates-file cmd))
          (fex (file-exists-p file))
+         (mpd-proc (get-process (helm-mpd-process-name cmd)))
          (proc (make-process :name (format "helm-mpd-candidates-process:%s" cmd)
                              :command (list "sh" "-c"
                                             (mapconcat 'identity
-                                                       (cons (concat "cat "
-                                                                     (if fex file "-"))
+                                                       (cons (cond ((process-live-p mpd-proc)
+                                                                    (format "tail -n +1 -f --pid=%d %s"
+                                                                            (process-id (process-get mpd-proc 'helm-mpd-dummy-proc))
+                                                                            file))
+                                                                   (fex (format "cat %s" file))
+                                                                   (t "cat -"))
                                                              (mapcar (lambda (ptn)
                                                                        (format "grep -i '%s'"
                                                                                (helm-mpd-pattern-to-regexp ptn)))
@@ -240,6 +250,15 @@
       (helm-mpd-make-process cmd file proc))
     proc))
 
+(defun helm-mpd-update ()
+  (let* ((cmd (helm-attr 'mpd-command))
+         (file (helm-mpd-candidates-file cmd))
+         (proc (get-process (helm-mpd-process-name cmd))))
+    (when (process-live-p proc)
+      (delete-process proc))
+    (when (file-exists-p file)
+      (delete-file file))))
+
 (defclass helm-source-mpd-base (helm-source-async)
   ((filtered-candidate-transformer :initform '(helm-mpd-filtered-candidate-transformer))
    (candidates-process :initform 'helm-mpd-candidates-process)
@@ -247,10 +266,7 @@
    (action-transformer :initform '(helm-mpd-action-transformer-current-playlist
                                    helm-mpd-action-transformer-song
                                    helm-mpd-action-transformer-playlist))
-   (update :initform (lambda ()
-                       (let ((file (helm-mpd-candidates-file (helm-attr 'mpd-command))))
-                         (when (file-exists-p file)
-                           (delete-file file)))))
+   (update :initform 'helm-mpd-update)
    (mpd-command :initarg :mpd-command)))
 
 (defvar helm-source-mpd-current-playlist
