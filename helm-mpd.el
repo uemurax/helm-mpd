@@ -28,58 +28,80 @@
 (defvar helm-mpd-tag-begin "<%s>")
 (defvar helm-mpd-tag-end "</%s>")
 (defvar helm-mpd-item-keywords '("file" "directory" "playlist"))
-(defvar helm-mpd-known-tags nil)
 
-(defvar-local helm-mpd-local-process nil)
+(defun helm-mpd-process-name (cmd)
+  (format "helm-mpd-process:%s" cmd))
 
-(defun helm-mpd-make-process (cmd &optional output-buffer)
-  (let* ((proc-args (append (list :name "helm-mpd"
+(defun helm-mpd-make-process (cmd &optional output-file output-proc)
+  (let* ((proc-args (append (list :name (helm-mpd-process-name cmd)
                                   :host helm-mpd-host
                                   :service helm-mpd-port)
-                            (when output-buffer
-                              (list :buffer (let ((b (get-buffer-create (format "%s-temporary-output" (buffer-name output-buffer)))))
+                            (when output-file
+                              (list :buffer (let ((b (get-buffer-create (format "helm-mpd-temporary-output:%s" cmd))))
                                               (with-current-buffer b
                                                 (erase-buffer))
                                               b)
-                                    :filter 'helm-mpd-process-filter))))
+                                    :filter 'helm-mpd-process-filter
+                                    :sentinel 'helm-mpd-process-sentinel))))
          (proc (apply #'make-network-process proc-args)))
-    (process-put proc 'helm-mpd-buffer output-buffer)
+    (process-put proc 'helm-mpd-output-file output-file)
+    (process-put proc 'helm-mpd-output-process output-proc)
     (process-send-string proc (concat cmd "\n"))
     (process-send-eof proc)
     proc))
 
+(defun helm-mpd-process-sentinel (proc string)
+  (cond ((string-match "^\\(connection broken\\|deleted\\|finished\\|killed\\|exited\\|failed\\)" string)
+         (let ((out-proc (process-get proc 'helm-mpd-output-process)))
+           (when (process-live-p out-proc)
+             (process-send-eof out-proc))))))
+
 (defun helm-mpd-process-filter (proc string)
-  (let ((tmp-buf (process-buffer proc))
-        (out-buf (process-get proc 'helm-mpd-buffer)))
-    (with-current-buffer tmp-buf
+  (let ((buf (process-buffer proc))
+        (file (process-get proc 'helm-mpd-output-file))
+        (out-proc (process-get proc 'helm-mpd-output-process)))
+    (with-current-buffer buf
       (save-excursion
         (goto-char (point-max))
         (insert string))
-      (helm-mpd-parse-response out-buf))))
+      (helm-mpd-parse-response file out-proc))))
 
-(defun helm-mpd-parse-response (out-buf)
-  (while (search-forward-regexp "^\\([^:\n]*\\): \\([^\n]*\\)\n" nil t)
-    (let ((key (match-string 1))
-          (value (match-string 2)))
-      (add-to-list 'helm-mpd-known-tags (intern key))
-      (with-current-buffer out-buf
-        (when (seq-position helm-mpd-item-keywords key 'equal)
-          (insert "\n"))
-        (insert (format helm-mpd-tag-begin key)
-                value
-                (format helm-mpd-tag-end key))))))
+(defun helm-mpd-parse-response (output-file &optional proc)
+  (let ((buf (generate-new-buffer "helm-mpd-temporary-buffer")))
+    (unwind-protect
+        (progn
+          (while (search-forward-regexp "^\\([^:\n]*\\): \\([^\n]*\\)\n" nil t)
+            (let ((key (match-string 1))
+                  (value (match-string 2)))
+              (with-current-buffer buf
+                (when (seq-position helm-mpd-item-keywords key 'equal)
+                  (insert "\n"))
+                (insert (format helm-mpd-tag-begin key)
+                        value
+                        (format helm-mpd-tag-end key)))))
+          (mkdir (file-name-directory output-file) t)
+          (with-temp-file output-file
+            (when (file-exists-p output-file)
+              (forward-char (nth 1 (insert-file-contents output-file))))
+            (insert-buffer-substring buf))
+          (when (process-live-p proc)
+            (with-current-buffer buf
+              (process-send-region proc (point-min) (point-max)))))
+      (kill-buffer buf))))
 
 (defun helm-mpd-parse-object (object-string)
-  (do ((res nil res)
-       (attrs helm-mpd-known-tags (cdr attrs)))
-      ((null attrs) res)
-    (let ((attr (car attrs)))
-      (when (string-match (concat (format helm-mpd-tag-begin attr)
-                                  "\\(.*\\)"
-                                  (format helm-mpd-tag-end attr))
-                          object-string)
-        (setq res (cons `(,attr . ,(match-string 1 object-string))
-                        res))))))
+  (let ((res nil)
+        (tag "\\([^/<>]*\\)"))
+    (with-temp-buffer
+      (insert object-string)
+      (goto-char (point-min))
+      (while (search-forward-regexp (concat (format helm-mpd-tag-begin tag)
+                                            "\\([^]*\\)"
+                                            (format helm-mpd-tag-end tag))
+                                    nil t)
+        (setq res (cons `(,(intern (match-string 1)) . ,(match-string 2))
+                        res)))
+      res)))
 
 (defun helm-mpd-display-object-default (object)
   (or (cdr (assq 'directory object))
@@ -106,42 +128,6 @@
           (seq-filter (lambda (c)
                         (> (length c) 0))
                       candidates)))
-
-(defun helm-mpd-search-function-1 (pattern &optional bound)
-  (let* ((tag (if (string-match "^<\\([^<>]*\\)>\\(.*\\)$" pattern)
-                            (prog1
-                                 (match-string 1 pattern)
-                              (setq pattern (match-string 2 pattern)))
-                "[^<>]*")))
-    (when (and (boundp 'helm-migemo-mode) helm-migemo-mode)
-      (setq pattern (helm-mm-migemo-get-pattern pattern)))
-    (condition-case nil
-        (search-forward-regexp (concat (format helm-mpd-tag-begin tag)
-                                       "[^]*\\(" pattern "\\)[^]*"
-                                       (format helm-mpd-tag-end tag))
-                               bound t)
-      (invalid-regexp nil))))
-
-(defun helm-mpd-search-function (pattern)
-  (let ((ptns (split-string pattern)))
-    (if ptns
-        (let ((hd (car ptns))
-              (tl (cdr ptns))
-              (ret nil))
-          (while (and (not ret) (helm-mpd-search-function-1 hd))
-            (let ((end (save-excursion
-                         (move-end-of-line 1)
-                         (point))))
-              (if (seq-filter (lambda (p)
-                                (save-excursion
-                                  (move-beginning-of-line 1)
-                                  (not (helm-mpd-search-function-1 p end))))
-                              tl)
-                  (forward-line)
-                (setq ret (point)))))
-          ret)
-      (forward-char)
-      (point))))
 
 (defvar helm-mpd--info-buffer "*helm-mpd-info*")
 
@@ -209,49 +195,73 @@
           (when (assq 'playlist object)
             '(("Load playlist(s)" . helm-mpd-action-load)))))
 
-(defclass helm-source-mpd-base (helm-source-in-buffer)
+(defvar helm-mpd-tmp-directory
+  (expand-file-name "tmp" (file-name-directory load-file-name)))
+
+(defun helm-mpd-candidates-file (cmd)
+  (expand-file-name (format "helm-mpd-candidates-%s" cmd)
+                    helm-mpd-tmp-directory))
+
+(defun helm-mpd-pattern-to-regexp (ptn)
+  (let ((tag "[^/<>]*"))
+    (when (string-match "^<\\([^<>]*\\)>\\(.*\\)$" ptn)
+      (setq tag (match-string 1 ptn))
+      (setq ptn (match-string 2 ptn)))
+    (when (and (boundp 'helm-migemo-mode) helm-migemo-mode)
+      (setq ptn
+            (car (split-string
+                  (replace-regexp-in-string "\\([()|]\\)" "\\\\\\1"
+                                            (shell-command-to-string
+                                             (mapconcat 'identity
+                                                        (list migemo-command
+                                                              "-d" migemo-dictionary
+                                                              "-q" "-w" ptn)
+                                                        " ")))
+                  "\n"))))
+    (concat (format helm-mpd-tag-begin tag)
+            "[^]*\\(" ptn "\\)[^]*"
+            (format helm-mpd-tag-end tag))))
+
+(defun helm-mpd-candidates-process ()
+  (let* ((cmd (helm-attr 'mpd-command))
+         (file (helm-mpd-candidates-file cmd))
+         (fex (file-exists-p file))
+         (proc (make-process :name (format "helm-mpd-candidates-process:%s" cmd)
+                             :command (list "sh" "-c"
+                                            (mapconcat 'identity
+                                                       (cons (concat "cat "
+                                                                     (if fex file "-"))
+                                                             (mapcar (lambda (ptn)
+                                                                       (format "grep -i '%s'"
+                                                                               (helm-mpd-pattern-to-regexp ptn)))
+                                                                     (split-string helm-pattern)))
+                                                       " | ")))))
+    (unless fex
+      (helm-mpd-make-process cmd file proc))
+    proc))
+
+(defclass helm-source-mpd-base (helm-source-async)
   ((filtered-candidate-transformer :initform '(helm-mpd-filtered-candidate-transformer))
-   (search :initform '(helm-mpd-search-function))
-   (matchplugin :initform nil)
+   (candidates-process :initform 'helm-mpd-candidates-process)
    (action :initform 'helm-mpd-object-action)
    (action-transformer :initform '(helm-mpd-action-transformer-current-playlist
                                    helm-mpd-action-transformer-song
-                                   helm-mpd-action-transformer-playlist))))
+                                   helm-mpd-action-transformer-playlist))
+   (update :initform (lambda ()
+                       (let ((file (helm-mpd-candidates-file (helm-attr 'mpd-command))))
+                         (when (file-exists-p file)
+                           (delete-file file)))))
+   (mpd-command :initarg :mpd-command)))
 
-(defun helm-mpd-refresh-buffer (buffer cmd)
-  (with-current-buffer buffer
-    (when (processp helm-mpd-local-process)
-      (delete-process helm-mpd-local-process))
-    (erase-buffer)
-    (setq helm-mpd-local-process
-          (helm-mpd-make-process cmd buffer))))
-
-(defmacro helm-mpd-defclass (name cmd)
-  (let ((cb-var (intern (format "helm-mpd-%s-candidate-buffer" name)))
-        (cb-val (format "*helm-mpd-%s-candidates*" name))
-        (cls (intern (format "helm-source-mpd-%s" name)))
-        (cmd-var (intern (format "helm-mpd-%s-command" name))))
-    `(progn
-       (defvar ,cb-var ,cb-val)
-       (defvar ,cmd-var ,cmd)
-       (defclass ,cls (helm-source-mpd-base)
-         ((init :initform (lambda ()
-                            (let ((buf (get-buffer-create ,cb-var)))
-                              (helm-candidate-buffer buf)
-                              (when (with-current-buffer buf
-                                      (= (length (buffer-string)) 0))
-                                (helm-mpd-refresh-buffer buf ,cmd-var))))))))))
-
-(helm-mpd-defclass current-playlist "playlistinfo")
-(helm-mpd-defclass songs "listallinfo")
-(helm-mpd-defclass playlists "listplaylists")
-
-(setq helm-source-mpd-current-playlist
-      (helm-make-source "Current playlist" 'helm-source-mpd-current-playlist))
-(setq helm-source-mpd-songs
-      (helm-make-source "Songs" 'helm-source-mpd-songs))
-(setq helm-source-mpd-playlists
-      (helm-make-source "Playlists" 'helm-source-mpd-playlists))
+(defvar helm-source-mpd-current-playlist
+  (helm-make-source "Current playlist" 'helm-source-mpd-base
+    :mpd-command "playlistinfo"))
+(defvar helm-source-mpd-songs
+  (helm-make-source "Songs" 'helm-source-mpd-base
+    :mpd-command "listallinfo"))
+(defvar helm-source-mpd-playlists
+  (helm-make-source "Playlists" 'helm-source-mpd-base
+    :mpd-command "listplaylists"))
 
 (defvar helm-source-mpd
   '(helm-source-mpd-current-playlist
