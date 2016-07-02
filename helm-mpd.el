@@ -48,20 +48,15 @@
          (proc (apply #'make-network-process proc-args)))
     (process-put proc 'helm-mpd-output-file output-file)
     (process-put proc 'helm-mpd-output-process output-proc)
-    (process-put proc 'helm-mpd-dummy-proc (make-process :name "helm-mpd-dummy-process"
-                                                         :command '("cat" "-")))
     (process-send-string proc (concat cmd "\n"))
     (process-send-eof proc)
     proc))
 
 (defun helm-mpd-process-sentinel (proc string)
   (cond ((string-match "^\\(connection broken\\|deleted\\|finished\\|killed\\|exited\\|failed\\)" string)
-         (let((out-proc (process-get proc 'helm-mpd-output-process))
-              (dummy-proc (process-get proc 'helm-mpd-dummy-proc)))
+         (let ((out-proc (process-get proc 'helm-mpd-output-process)))
            (when (process-live-p out-proc)
-             (process-send-eof out-proc))
-           (when (process-live-p dummy-proc)
-             (process-send-eof dummy-proc))))))
+             (process-send-eof out-proc))))))
 
 (defun helm-mpd-process-filter (proc string)
   (let ((buf (process-buffer proc))
@@ -235,11 +230,7 @@
          (proc (make-process :name (format "helm-mpd-candidates-process:%s" cmd)
                              :command (list "sh" "-c"
                                             (mapconcat 'identity
-                                                       (cons (cond ((process-live-p mpd-proc)
-                                                                    (format "tail -n +1 -f --pid=%d %s"
-                                                                            (process-id (process-get mpd-proc 'helm-mpd-dummy-proc))
-                                                                            file))
-                                                                   (fex (format "cat %s" file))
+                                                       (cons (cond (fex (format "cat %s" file))
                                                                    (t "cat -"))
                                                              (mapcar (lambda (ptn)
                                                                        (format "grep -i '%s'"
