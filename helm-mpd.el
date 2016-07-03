@@ -145,14 +145,58 @@ If non-nil, try to use the previous result for CMD."
 
 ;;;; Display candidates
 
+(defface helm-mpd-directory-face
+  '((t (:inherit dired-directory)))
+  "Directory face"
+  :group 'helm-mpd)
+
+(defface helm-mpd-playlist-face
+  '((t (:inherit font-lock-function-name-face)))
+  "Playlist face"
+  :group 'helm-mpd)
+
+(defface helm-mpd-Artist-face
+  '((t (:inherit font-lock-keyword-face)))
+  "Artist face"
+  :group 'helm-mpd)
+
+(defface helm-mpd-Title-face
+  '((t (:inherit font-lock-variable-name-face)))
+  "Title face"
+  :group 'helm-mpd)
+
+(defface helm-mpd-Album-face
+  '((t (:inherit font-lock-type-face)))
+  "Album face"
+  :group 'helm-mpd)
+
+(defun helm-mpd-format-object (object width)
+  (let* ((Artist-w (floor (* 0.2 width)))
+         (Album-w (floor (* 0.3 width)))
+         (Title-w (- width Artist-w Album-w))
+         (Pos-w 0)
+         (tags '(Artist Title Album)))
+    (when (assq 'Pos object)
+      (setq tags (cons 'Pos tags)
+            Pos-w 4)
+      (setq Title-w (- Title-w Pos-w)))
+    (mapconcat (lambda (tag)
+                 (propertize (truncate-string-to-width (or (cdr (assq tag object)) "")
+                                                       (symbol-value (intern (format "%s-w" tag)))
+                                                       nil ?\ )
+                             'face (intern (format "helm-mpd-%s-face" tag))))
+               tags "")))
+
 (defun helm-mpd-display-object-default (object)
-  (or (cdr (assq 'directory object))
-      (cdr (assq 'playlist object))
-      (concat (cdr (assq 'Artist object))
-              " "
-              (cdr (assq 'Title object))
-              " "
-              (cdr (assq 'Album object)))))
+  (cond ((assq 'directory object)
+         (propertize (cdr (assq 'directory object))
+                     'face 'helm-mpd-directory-face))
+        ((assq 'playlist object)
+         (propertize (cdr (assq 'playlist object))
+                     'face 'helm-mpd-playlist-face))
+        (t
+         (helm-mpd-format-object object (with-helm-window
+                                          (window-text-width))))))
 
 (defcustom helm-mpd-display-object-function
   'helm-mpd-display-object-default
@@ -366,7 +410,8 @@ Called interactively with a prefix argument, prompt address family, host and por
   (when (plist-member args :service)
     (setq helm-mpd-connection-port (plist-get args :service)))
   (helm :sources helm-source-mpd
-        :buffer "*helm-mpd*"))
+        :buffer "*helm-mpd*"
+        :truncate-lines t))
 
 (provide 'helm-mpd)
 
