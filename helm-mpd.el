@@ -332,6 +332,36 @@ To specify a tag, input \"<TAG>PATTERN\"."
           (when (assq 'playlist object)
             '(("Load playlist(s)" . helm-mpd-action-load)))))
 
+;;;; Key map
+
+(defun helm-mpd-make-command (actions)
+  "Return a command to run the first ACTIONS that can be performed in the
+current helm session without exiting the session."
+  (lexical-let ((actions actions))
+    (lambda ()
+      (interactive)
+      (with-helm-alive-p
+        (let* ((helm-action (helm-get-actions-from-current-source))
+               (action (seq-find (lambda (a)
+                                   (rassq a helm-action))
+                                 actions)))
+          (if action
+              (progn
+                (helm-attrset 'helm-mpd-persistent-action action)
+                (helm-execute-persistent-action 'helm-mpd-persistent-action))
+            (message "Cannot be perform actions %s" actions)))))))
+
+(defvar helm-mpd-map
+  (let ((m (make-sparse-keymap)))
+    (set-keymap-parent m helm-map)
+    (mapc (lambda (v)
+            (define-key m (kbd (car v)) (cdr v)))
+          `(("C-c a" . ,(helm-mpd-make-command '(helm-mpd-action-add
+                                                 helm-mpd-action-load)))
+            ("C-c d" . ,(helm-mpd-make-command '(helm-mpd-action-delete)))
+            ("C-c RET" . ,(helm-mpd-make-command '(helm-mpd-action-play)))))
+    m))
+
 ;;;; Helm sources
 
 (defclass helm-source-mpd-base (helm-source)
@@ -347,6 +377,7 @@ To specify a tag, input \"<TAG>PATTERN\"."
                        (when (helm-attr-defined 'mpd-cache)
                          (helm-mpd-candidates-synchronously (helm-attr 'mpd-command)))))
    (match :initform '(helm-mpd-match))
+   (keymap :initform helm-mpd-map)
    (mpd-command :initarg :mpd-command
                 :documentation "A command to retrieve candidates.")
    (mpd-cache :initarg :mpd-cache
