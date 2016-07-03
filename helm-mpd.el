@@ -388,8 +388,37 @@ current helm session without exiting the session."
               :initform nil
               :documentation "If non-nil, use candidates cache.")))
 
+(defun helm-mpd-current-playlist-highlight-current (candidates &optional source)
+  (let ((buf (helm-mpd-retrieve-synchronously "currentsong")))
+    (unwind-protect
+        (let ((id (with-current-buffer buf
+                    (goto-char (point-min))
+                    (when (search-forward-regexp "^Id: \\(.*\\)$" nil t)
+                      (match-string 1)))))
+          (if id
+              (do ((up nil (cons (car down) up))
+                   (down candidates (cdr down))
+                   (cur nil cur))
+                  ((or cur (null down))
+                   (append (reverse (if cur
+                                        (cons cur (cdr up))
+                                      up))
+                           down))
+                (let* ((x (car down))
+                       (i (assq 'Id (cdr x))))
+                  (when (and i (equal id (cdr i)))
+                    (setq cur
+                          (cons (let ((nt (propertize (car x))))
+                                  (add-face-text-property 0 (length nt) 'underline
+                                                          nil nt)
+                                  nt)
+                                (cdr x))))))
+            candidates))
+      (kill-buffer buf))))
+
 (defvar helm-source-mpd-current-playlist
   (helm-make-source "Current playlist" 'helm-source-mpd-base
+    :filtered-candidate-transformer '(helm-mpd-current-playlist-highlight-current)
     :mpd-command "playlistinfo"))
 (defvar helm-source-mpd-songs
   (helm-make-source "Songs" 'helm-source-mpd-base
