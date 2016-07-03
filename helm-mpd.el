@@ -170,6 +170,11 @@ If non-nil, try to use the previous result for CMD."
   "Album face"
   :group 'helm-mpd)
 
+(defface helm-mpd-Pos-face
+  '((t ()))
+  "Position face"
+  :group 'helm-mpd)
+
 (defun helm-mpd-format-object (object width)
   (let* ((Artist-w (floor (* 0.2 width)))
          (Album-w (floor (* 0.3 width)))
@@ -368,7 +373,6 @@ current helm session without exiting the session."
   ((candidates :initform (lambda ()
                            (helm-mpd-candidates-synchronously (helm-attr 'mpd-command)
                                                               :cache (helm-attr-defined 'mpd-cache))))
-   (filter-one-by-one :initform 'helm-mpd-filter-one-by-one)
    (action :initform 'helm-mpd-object-action)
    (action-transformer :initform '(helm-mpd-action-transformer-current-playlist
                                    helm-mpd-action-transformer-song
