@@ -213,7 +213,15 @@ To specify a tag, input \"<TAG>PATTERN\"."
       (view-mode)
       (let ((buffer-read-only nil))
         (erase-buffer)
-        (insert (format "%S" (helm-marked-candidates)))))))
+        (save-excursion
+          (mapc (lambda (c)
+                  (mapc (lambda (x)
+                          (when (consp x)
+                            (insert (format "%s: %s\n"
+                                            (car x) (cdr x)))))
+                        c)
+                  (insert "\n"))
+                (helm-marked-candidates)))))))
 
 (defcustom helm-mpd-object-action
   (helm-make-actions
