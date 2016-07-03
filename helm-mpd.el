@@ -1,4 +1,4 @@
-;;; helm-mpd.el --- Helm interface for MPD
+;;; helm-mpd.el --- Helm interface for Music Player Daemon
 ;;
 ;; Copyright (C) 2016 Taichi Uemura
 ;;
@@ -12,7 +12,7 @@
 (require 'helm)
 
 (defgroup helm-mpd ()
-  "Predefined configurations for `helm-mpd'."
+  "Helm interface for Music Player Daemon."
   :group 'helm)
 
 (defcustom helm-mpd-host "localhost"
@@ -25,7 +25,29 @@
   :group 'helm-mpd
   :type 'number)
 
+;;;; Interaction with server
+
 (defun helm-mpd-retrieve-synchronously (cmd &rest args)
+  "Send CMD, wait for response and return a new buffer containing the response.
+
+ARGS are the following keyword arguments passed to `make-network-process'.
+
+`:name'
+
+The name of process.
+
+`:host'
+
+Host name. Default value is `helm-mpd-host'.
+
+`:service'
+
+Port. Default value is `helm-mpd-port'.
+
+`:family'
+
+To use a local address, set this property to `local'
+and set `:service' to the path to the socket."
   (let* ((buf (generate-new-buffer "*helm-mpd-output*"))
          (proc (make-network-process :name (or (plist-get args :name)
                                                (format "helm-mpd:%s" cmd))
@@ -43,6 +65,9 @@
     buf))
 
 (defun helm-mpd-send-command (cmd &rest args)
+  "Send CMD asynchronously and return a process.
+
+ARGS are same as `helm-mpd-retrieve-synchronously'."
   (let ((proc (make-network-process :name (or (plist-get args :name)
                                               (format "helm-mpd:%s" cmd))
                                     :host (or (plist-get args :host)
@@ -57,6 +82,7 @@
 (defvar helm-mpd-item-keywords '("file" "directory" "playlist"))
 
 (defun helm-mpd-parse-response ()
+  "Parse response from the point."
   (let ((buf (generate-new-buffer "helm-mpd-temp-buffer")))
     (unwind-protect
         (progn
@@ -77,9 +103,19 @@
             (cdr (sexp-at-point))))
       (kill-buffer buf))))
 
+;;;; Collect candidates
+
 (defvar helm-mpd-candidates-cache (make-hash-table :test 'equal))
 
 (defun helm-mpd-candidates-synchronously (cmd &rest args)
+  "Collect candidates for CMD synchronously.
+
+ARGS are passed to `helm-mpd-candidates-synchronously'
+and allow some additional arguments.
+
+`:cache'
+
+If non-nil, try to use the previous result for CMD."
   (let ((cache nil))
     (when (plist-get args :cache)
       (setq cache (gethash cmd helm-mpd-candidates-cache)))
@@ -91,6 +127,8 @@
                 (puthash cmd (helm-mpd-parse-response)
                          helm-mpd-candidates-cache))
             (kill-buffer buf))))))
+
+;;;; Display candidates
 
 (defun helm-mpd-display-object-default (object)
   (or (cdr (assq 'directory object))
@@ -108,10 +146,13 @@
   :type 'function)
 
 (defun helm-mpd-filter-one-by-one (object)
+  "Convert OBJECT to (DISPLAY . OBJECT)."
   (cons (propertize (funcall helm-mpd-display-object-function
                              object)
                     'mpd-object object)
         object))
+
+;;;; Match function
 
 (defun helm-mpd-match-function-1 (pattern object &optional migemo)
   (let* ((mfn1 (if migemo
@@ -134,13 +175,23 @@
                    (split-string pattern))))
 
 (defun helm-mpd-match (candidate)
+  "Match function.
+
+By default search by any tag.
+
+To specify a tag, input \"<TAG>PATTERN\"."
   (let ((object (get-text-property 0 'mpd-object candidate)))
     (helm-mpd-match-function helm-pattern object
                              (and (boundp 'helm-migemo-mode) helm-migemo-mode))))
 
+;;;; Actions
+
+;;;;; General
+
 (defvar helm-mpd--info-buffer "*helm-mpd-info*")
 
 (defun helm-mpd-object-show (_ignore)
+  "Show candidates' information."
   (let ((buf (get-buffer-create helm-mpd--info-buffer)))
     (display-buffer buf)
     (with-current-buffer buf
@@ -156,11 +207,15 @@
   :group 'helm-mpd
   :type 'alist)
 
+;;;;; Actions for the current playlist
+
 (defun helm-mpd-action-play (object)
+  "Play the selected candidate."
   (helm-mpd-send-command (format "playid %s"
                                  (cdr (assq 'Id object)))))
 
 (defun helm-mpd-action-delete (_ignore)
+  "Delete the selected candidates from the current playlist."
   (helm-mpd-send-command (concat "command_list_begin\n"
                                  (mapconcat (lambda (c)
                                               (format "deleteid %s"
@@ -175,7 +230,10 @@
             '(("Play song" . helm-mpd-action-play)
               ("Delete song(s)" . helm-mpd-action-delete)))))
 
+;;;;; Actions for songs
+
 (defun helm-mpd-action-add (_ignore)
+  "Add the selected candidates to the current playlist."
   (helm-mpd-send-command (concat "command_list_begin\n"
                                  (mapconcat (lambda (c)
                                               (format "add %s"
@@ -190,7 +248,10 @@
           (when (or (assq 'file object) (assq 'directory object))
             '(("Add song(s)" . helm-mpd-action-add)))))
 
+;;;;; Actions for playlists
+
 (defun helm-mpd-action-load (_ignore)
+  "Load the selected playlists."
   (helm-mpd-send-command (concat "command_list_begin\n"
                                  (mapconcat (lambda (c)
                                               (format "load %s"
@@ -203,6 +264,8 @@
   (append actions
           (when (assq 'playlist object)
             '(("Load playlist(s)" . helm-mpd-action-load)))))
+
+;;;; Helm sources
 
 (defclass helm-source-mpd-base (helm-source)
   ((candidates :initform (lambda ()
@@ -217,9 +280,11 @@
                        (when (helm-attr-defined 'mpd-cache)
                          (helm-mpd-candidates-synchronously (helm-attr 'mpd-command)))))
    (match :initform '(helm-mpd-match))
-   (mpd-command :initarg :mpd-command)
+   (mpd-command :initarg :mpd-command
+                :documentation "A command to retrieve candidates.")
    (mpd-cache :initarg :mpd-cache
-              :initform nil)))
+              :initform nil
+              :documentation "If non-nil, use candidates cache.")))
 
 (defvar helm-source-mpd-current-playlist
   (helm-make-source "Current playlist" 'helm-source-mpd-base
@@ -237,8 +302,11 @@
     helm-source-mpd-songs
     helm-source-mpd-playlists))
 
+;;;; Entry point
+
 ;;;###autoload
 (defun helm-mpd ()
+  "Helm for MPD."
   (interactive)
   (helm :sources helm-source-mpd
         :buffer "*helm-mpd*"))
