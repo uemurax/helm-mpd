@@ -139,7 +139,7 @@ If non-nil, try to use the previous result for CMD."
           (unwind-protect
               (with-current-buffer buf
                 (goto-char (point-min))
-                (puthash cmd (helm-mpd-parse-response)
+                (puthash cmd (mapcar 'helm-mpd-filter-one-by-one (helm-mpd-parse-response))
                          helm-mpd-candidates-cache))
             (kill-buffer buf))))))
 
