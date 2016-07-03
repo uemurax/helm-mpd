@@ -356,7 +356,8 @@ current helm session without exiting the session."
           (if action
               (progn
                 (helm-attrset 'helm-mpd-persistent-action action)
-                (helm-execute-persistent-action 'helm-mpd-persistent-action))
+                (helm-execute-persistent-action 'helm-mpd-persistent-action)
+                (helm-refresh))
             (message "Cannot be perform actions %s" actions)))))))
 
 (defvar helm-mpd-map
