@@ -15,17 +15,35 @@
   "Helm interface for Music Player Daemon."
   :group 'helm)
 
-(defcustom helm-mpd-host "localhost"
+(defcustom helm-mpd-connection-host "localhost"
   "MPD host."
   :group 'helm-mpd
-  :type 'string)
+  :type '(choice (const nil)
+                 string))
 
-(defcustom helm-mpd-port 6600
+(defcustom helm-mpd-connection-port 6600
   "MPD port."
   :group 'helm-mpd
-  :type 'number)
+  :type '(choice number
+                 string))
+
+(defcustom helm-mpd-connection-family nil
+  "Address family."
+  :group 'helm-mpd
+  :type '(choice (const :tag "default" nil)
+                 (const :tag "socket" local)
+                 (const :tag "IPv4" ipv4)
+                 (const :tag "IPv6" ipv6)))
 
 ;;;; Interaction with server
+
+(defun helm-mpd-make-connection-parameter (&rest args)
+  (list :host (or (plist-get args :host)
+                  helm-mpd-connection-host)
+        :service (or (plist-get args :service)
+                     helm-mpd-connection-port)
+        :family (or (plist-get args :family)
+                    helm-mpd-connection-family)))
 
 (defun helm-mpd-retrieve-synchronously (cmd &rest args)
   "Send CMD, wait for response and return a new buffer containing the response.
@@ -49,15 +67,12 @@ Port. Default value is `helm-mpd-port'.
 To use a local address, set this property to `local'
 and set `:service' to the path to the socket."
   (let* ((buf (generate-new-buffer "*helm-mpd-output*"))
-         (proc (make-network-process :name (or (plist-get args :name)
-                                               (format "helm-mpd:%s" cmd))
-                                     :buffer buf
-                                     :host (or (plist-get args :host)
-                                               helm-mpd-host)
-                                     :service (or (plist-get args :service)
-                                                  helm-mpd-port)
-                                     :family (plist-get args :family)
-                                     :sentinel 'ignore)))
+         (proc (apply #'make-network-process
+                      :name (or (plist-get args :name)
+                                (format "helm-mpd:%s" cmd))
+                      :buffer buf
+                      :sentinel 'ignore
+                      (apply #'helm-mpd-make-connection-parameter args))))
     (process-send-string proc (concat cmd "\n"))
     (process-send-eof proc)
     (while (process-live-p proc)
@@ -68,13 +83,10 @@ and set `:service' to the path to the socket."
   "Send CMD asynchronously and return a process.
 
 ARGS are same as `helm-mpd-retrieve-synchronously'."
-  (let ((proc (make-network-process :name (or (plist-get args :name)
-                                              (format "helm-mpd:%s" cmd))
-                                    :host (or (plist-get args :host)
-                                              helm-mpd-host)
-                                    :service (or (plist-get args :service)
-                                                 helm-mpd-port)
-                                    :family (plist-get args :family))))
+  (let ((proc (apply #'make-network-process
+                     :name (or (plist-get args :name)
+                               (format "helm-mpd:%s" cmd))
+                     (apply #'helm-mpd-make-connection-parameter args))))
     (process-send-string proc (concat cmd "\n"))
     (process-send-eof proc)
     proc))
@@ -106,6 +118,9 @@ ARGS are same as `helm-mpd-retrieve-synchronously'."
 ;;;; Collect candidates
 
 (defvar helm-mpd-candidates-cache (make-hash-table :test 'equal))
+
+(defun helm-mpd-clear-candidates-cache ()
+  (clrhash helm-mpd-candidates-cache))
 
 (defun helm-mpd-candidates-synchronously (cmd &rest args)
   "Collect candidates for CMD synchronously.
@@ -304,10 +319,44 @@ To specify a tag, input \"<TAG>PATTERN\"."
 
 ;;;; Entry point
 
+(defun helm-mpd-read-connection-parameter ()
+  (let ((family (let ((type (get 'helm-mpd-connection-family 'custom-type)))
+                  (when (and (consp type) (eq (car type) 'choice))
+                    (let ((ass (mapcar (lambda (x) (cons (plist-get (cdr x) :tag)
+                                                         (nth (1- (length x)) x)))
+                                       (cdr type))))
+                      (cdr (assoc (completing-read "Family: " ass
+                                                   nil t nil nil "default")
+                                  ass))))))
+        (host nil)
+        (service nil))
+    (cond ((eq family 'local)
+           (setq service (read-file-name "Socket: "
+                                         nil nil t "~/.config/mpd/socket")))
+          (t
+           (setq host (read-string "Host: " (or helm-mpd-connection-host "localhost")))
+           (setq service (read-number "Port: " (if (numberp helm-mpd-connection-port)
+                                                   helm-mpd-connection-port
+                                                 6600)))))
+    (list :family family
+          :host host
+          :service service)))
+
 ;;;###autoload
-(defun helm-mpd ()
-  "Helm for MPD."
-  (interactive)
+(defun helm-mpd (&rest args)
+  "Helm for MPD.
+
+Called interactively with a prefix argument, prompt address family, host and port."
+  (interactive (when current-prefix-arg
+                 (helm-mpd-read-connection-parameter)))
+  (when args
+    (helm-mpd-clear-candidates-cache))
+  (when (plist-member args :family)
+    (setq helm-mpd-connection-family (plist-get args :family)))
+  (when (plist-member args :host)
+    (setq helm-mpd-connection-host (plist-get args :host)))
+  (when (plist-member args :service)
+    (setq helm-mpd-connection-port (plist-get args :service)))
   (helm :sources helm-source-mpd
         :buffer "*helm-mpd*"))
 
