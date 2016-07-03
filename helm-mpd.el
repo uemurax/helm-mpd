@@ -265,6 +265,19 @@ To specify a tag, input \"<TAG>PATTERN\"."
 
 (defvar helm-mpd--info-buffer "*helm-mpd-info*")
 
+(defun helm-mpd-insert-subcontents (cmd &optional fill-prefix)
+  (let ((buf (helm-mpd-retrieve-synchronously cmd))
+        (fill-prefix (or fill-prefix "    ")))
+    (unwind-protect
+        (progn
+          (with-current-buffer buf
+            (goto-char (point-min))
+            (while (search-forward-regexp "^\\(OK\\|ACK\\)" nil t)
+              (kill-whole-line 0))
+            (indent-region (point-min) (point-max)))
+          (insert-buffer-substring buf))
+      (kill-buffer buf))))
+
 (defun helm-mpd-object-show (_ignore)
   "Show candidates' information."
   (let ((buf (get-buffer-create helm-mpd--info-buffer)))
@@ -280,6 +293,12 @@ To specify a tag, input \"<TAG>PATTERN\"."
                             (insert (format "%s: %s\n"
                                             (car x) (cdr x)))))
                         c)
+                  (cond ((assq 'directory c)
+                         (helm-mpd-insert-subcontents
+                          (format "listfiles %s" (cdr (assq 'directory c)))))
+                        ((assq 'playlist c)
+                         (helm-mpd-insert-subcontents
+                          (format "listplaylist %s" (cdr (assq 'playlist c))))))
                   (insert "\n"))
                 (helm-marked-candidates)))))))
 
