@@ -390,6 +390,11 @@ current helm session without exiting the session."
               :initform nil
               :documentation "If non-nil, use candidates cache.")))
 
+(defface helm-mpd-current-song-face
+  '((t (:inverse-video t)))
+  "Current song face"
+  :group 'helm-mpd)
+
 (defun helm-mpd-current-playlist-highlight-current (candidates &optional source)
   (let ((buf (helm-mpd-retrieve-synchronously "currentsong")))
     (unwind-protect
@@ -411,7 +416,8 @@ current helm session without exiting the session."
                   (when (and i (equal id (cdr i)))
                     (setq cur
                           (cons (let ((nt (propertize (car x))))
-                                  (add-face-text-property 0 (length nt) 'underline
+                                  (add-face-text-property 0 (length nt)
+                                                          'helm-mpd-current-song-face
                                                           nil nt)
                                   nt)
                                 (cdr x))))))
