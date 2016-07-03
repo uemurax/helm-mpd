@@ -91,6 +91,14 @@ ARGS are same as `helm-mpd-retrieve-synchronously'."
     (process-send-eof proc)
     proc))
 
+(defun helm-mpd-send-command-synchronously (cmd &rest args)
+  "Send CMD synchronously and discard response.
+
+ARGS are same as `helm-mpd-send-command'."
+  (let ((proc (apply #'helm-mpd-send-command cmd args)))
+    (while (process-live-p proc)
+      (accept-process-output proc))))
+
 (defvar helm-mpd-item-keywords '("file" "directory" "playlist"))
 
 (defun helm-mpd-parse-response ()
@@ -360,9 +368,23 @@ current helm session without exiting the session."
                 (helm-refresh))
             (message "Cannot be perform actions %s" actions)))))))
 
+(defun helm-mpd-refresh ()
+  "Update server and refresh helm."
+  (interactive)
+  (helm-mpd-send-command-synchronously "update")
+  (helm-refresh))
+
 (defvar helm-mpd-map
   (let ((m (make-sparse-keymap)))
     (set-keymap-parent m helm-map)
+    (mapc (lambda (v)
+            (define-key m (kbd (car v)) (cdr v)))
+          '(("C-c C-u" . helm-mpd-refresh)))
+    m))
+
+(defvar helm-mpd-source-map
+  (let ((m (make-sparse-keymap)))
+    (set-keymap-parent m helm-mpd-map)
     (mapc (lambda (v)
             (define-key m (kbd (car v)) (cdr v)))
           `(("C-c a" . ,(helm-mpd-make-command '(helm-mpd-action-add
@@ -384,7 +406,7 @@ current helm session without exiting the session."
    (update :initform (lambda ()
                        (helm-mpd-remove-candidate-cache (helm-attr 'mpd-command))))
    (match :initform '(helm-mpd-match))
-   (keymap :initform helm-mpd-map)
+   (keymap :initform helm-mpd-source-map)
    (mpd-command :initarg :mpd-command
                 :documentation "A command to retrieve candidates.")
    (mpd-cache :initarg :mpd-cache
@@ -484,6 +506,7 @@ Called interactively with a prefix argument, prompt address family, host and por
     (setq helm-mpd-connection-port (plist-get args :service)))
   (helm :sources helm-source-mpd
         :buffer "*helm-mpd*"
+        :keymap helm-mpd-map
         :truncate-lines t))
 
 (provide 'helm-mpd)
