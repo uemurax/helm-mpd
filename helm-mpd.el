@@ -119,6 +119,9 @@ ARGS are same as `helm-mpd-retrieve-synchronously'."
 
 (defvar helm-mpd-candidates-cache (make-hash-table :test 'equal))
 
+(defun helm-mpd-remove-candidate-cache (cmd)
+  (remhash cmd helm-mpd-candidates-cache))
+
 (defun helm-mpd-clear-candidates-cache ()
   (clrhash helm-mpd-candidates-cache))
 
@@ -378,8 +381,7 @@ current helm session without exiting the session."
                                    helm-mpd-action-transformer-song
                                    helm-mpd-action-transformer-playlist))
    (update :initform (lambda ()
-                       (when (helm-attr-defined 'mpd-cache)
-                         (helm-mpd-candidates-synchronously (helm-attr 'mpd-command)))))
+                       (helm-mpd-remove-candidate-cache (helm-attr 'mpd-command))))
    (match :initform '(helm-mpd-match))
    (keymap :initform helm-mpd-map)
    (mpd-command :initarg :mpd-command
