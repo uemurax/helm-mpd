@@ -427,6 +427,28 @@ current helm session without exiting the session."
 
 ;;;; Helm sources
 
+(defvar helm-mpd-base-help-message
+  "* Helm for MPD
+
+** Tag search
+
+`helm-mpd' supports tag search. Try input \"<TAG>PATTERN\". For example
+\"<artist>beatle\" matches objects that has a tag like \"artist\" whose value is
+like \"beatle\". TAG and PATTERN can be regular expressions. For PATTERN, it uses
+`migemo' if `helm-migemo-mode' is enabled.
+
+** Key bindings
+
+Some keys do different actions depending on the selected candidates.
+The default bindings are following.
+
+| Key     | Current playlist             | Songs                   | Playlists  |
+|---------+------------------------------+-------------------------+------------|
+| C-c a   | Add to current playlist      | Add to current playlist | Load       |
+| C-c d   | Delete from current playlist | Do nothing              | Do nothing |
+| C-c RET | Play                         | Add to current playlist | Load       |
+")
+
 (defclass helm-source-mpd-base (helm-source)
   ((candidates :initform (lambda ()
                            (helm-mpd-candidates-synchronously (helm-attr 'mpd-command)
@@ -441,6 +463,7 @@ current helm session without exiting the session."
    (keymap :initform helm-mpd-source-map)
    (persistent-action :initform (symbol-value 'helm-mpd-persistent-action))
    (persistent-help :initform (symbol-value 'helm-mpd-persistent-help))
+   (help-message :initform helm-mpd-base-help-message)
    (mpd-command :initarg :mpd-command
                 :documentation "A command to retrieve candidates.")
    (mpd-cache :initarg :mpd-cache
