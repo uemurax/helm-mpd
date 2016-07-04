@@ -309,9 +309,12 @@ To specify a tag, input \"<TAG>PATTERN\"."
                   (insert "\n"))
                 (helm-marked-candidates)))))))
 
+(defvar helm-mpd-persistent-action 'helm-mpd-object-show)
+(defvar helm-mpd-persistent-help "Show object(s) information")
+
 (defcustom helm-mpd-object-action
   (helm-make-actions
-   "Show object(s) information" 'helm-mpd-object-show)
+   helm-mpd-persistent-help helm-mpd-persistent-action)
   "Default action on objects."
   :group 'helm-mpd
   :type 'alist)
@@ -334,10 +337,10 @@ To specify a tag, input \"<TAG>PATTERN\"."
                                  "\ncommand_list_end")))
 
 (defun helm-mpd-action-transformer-current-playlist (actions object)
-  (append actions
-          (when (assq 'Id object)
+  (append (when (assq 'Id object)
             '(("Play song" . helm-mpd-action-play)
-              ("Delete song(s)" . helm-mpd-action-delete)))))
+              ("Delete song(s)" . helm-mpd-action-delete)))
+          actions))
 
 ;;;;; Actions for songs
 
@@ -353,9 +356,9 @@ To specify a tag, input \"<TAG>PATTERN\"."
                                  "\ncommand_list_end")))
 
 (defun helm-mpd-action-transformer-song (actions object)
-  (append actions
-          (when (or (assq 'file object) (assq 'directory object))
-            '(("Add song(s)" . helm-mpd-action-add)))))
+  (append (when (or (assq 'file object) (assq 'directory object))
+            '(("Add song(s)" . helm-mpd-action-add)))
+          actions))
 
 ;;;;; Actions for playlists
 
@@ -370,9 +373,9 @@ To specify a tag, input \"<TAG>PATTERN\"."
                                  "\ncommand_list_end")))
 
 (defun helm-mpd-action-transformer-playlist (actions object)
-  (append actions
-          (when (assq 'playlist object)
-            '(("Load playlist(s)" . helm-mpd-action-load)))))
+  (append (when (assq 'playlist object)
+            '(("Load playlist(s)" . helm-mpd-action-load)))
+          actions))
 
 ;;;; Key map
 
@@ -417,6 +420,8 @@ current helm session without exiting the session."
                                                  helm-mpd-action-load)))
             ("C-c d" . ,(helm-mpd-make-command '(helm-mpd-action-delete)))
             ("C-c RET" . ,(helm-mpd-make-command '(helm-mpd-action-play
+                                                   helm-mpd-action-add
+                                                   helm-mpd-action-load
                                                    helm-mpd-send-command-synchronously)))))
     m))
 
@@ -427,13 +432,15 @@ current helm session without exiting the session."
                            (helm-mpd-candidates-synchronously (helm-attr 'mpd-command)
                                                               :cache (helm-attr-defined 'mpd-cache))))
    (action :initform 'helm-mpd-object-action)
-   (action-transformer :initform '(helm-mpd-action-transformer-current-playlist
+   (action-transformer :initform '(helm-mpd-action-transformer-playlist
                                    helm-mpd-action-transformer-song
-                                   helm-mpd-action-transformer-playlist))
+                                   helm-mpd-action-transformer-current-playlist))
    (update :initform (lambda ()
                        (helm-mpd-remove-candidate-cache (helm-attr 'mpd-command))))
    (match :initform '(helm-mpd-match))
    (keymap :initform helm-mpd-source-map)
+   (persistent-action :initform (symbol-value 'helm-mpd-persistent-action))
+   (persistent-help :initform (symbol-value 'helm-mpd-persistent-help))
    (mpd-command :initarg :mpd-command
                 :documentation "A command to retrieve candidates.")
    (mpd-cache :initarg :mpd-cache
