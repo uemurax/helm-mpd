@@ -127,6 +127,12 @@ ARGS are same as `helm-mpd-send-command'."
 
 (defvar helm-mpd-candidates-cache (make-hash-table :test 'equal))
 
+(defun helm-mpd-get-candidate-cache (cmd)
+  (gethash cmd helm-mpd-candidates-cache))
+
+(defun helm-mpd-put-candidate-cache (cmd value)
+  (puthash cmd value helm-mpd-candidates-cache))
+
 (defun helm-mpd-remove-candidate-cache (cmd)
   (remhash cmd helm-mpd-candidates-cache))
 
@@ -144,15 +150,16 @@ and allow some additional arguments.
 If non-nil, try to use the previous result for CMD."
   (let ((cache nil))
     (when (plist-get args :cache)
-      (setq cache (gethash cmd helm-mpd-candidates-cache)))
+      (setq cache (helm-mpd-get-candidate-cache cmd)))
     (or cache
-        (let ((buf (apply 'helm-mpd-retrieve-synchronously cmd args)))
-          (unwind-protect
-              (with-current-buffer buf
-                (goto-char (point-min))
-                (puthash cmd (mapcar 'helm-mpd-filter-one-by-one (helm-mpd-parse-response))
-                         helm-mpd-candidates-cache))
-            (kill-buffer buf))))))
+        (helm-mpd-put-candidate-cache
+         cmd
+         (let ((buf (apply 'helm-mpd-retrieve-synchronously cmd args)))
+           (unwind-protect
+               (with-current-buffer buf
+                 (goto-char (point-min))
+                 (mapcar 'helm-mpd-filter-one-by-one (helm-mpd-parse-response)))
+             (kill-buffer buf)))))))
 
 ;;;; Display candidates
 
@@ -478,10 +485,65 @@ current helm session without exiting the session."
   (helm-make-source "Playlists" 'helm-source-mpd-base
     :mpd-command "listplaylists"))
 
+;;;;; MPD commands
+
+(defun helm-mpd-command-candidates ()
+  "Get available commands."
+  (let ((cmd "commands"))
+    (or (helm-mpd-get-candidate-cache cmd)
+        (helm-mpd-put-candidate-cache
+         cmd
+         (let ((buf (helm-mpd-retrieve-synchronously cmd)))
+           (unwind-protect
+               (let ((res nil))
+                 (with-current-buffer buf
+                   (goto-char (point-min))
+                   (while (search-forward-regexp "^command: \\(.*\\)$" nil t)
+                     (setq res (cons (match-string 1)
+                                     res)))
+                   (reverse res)))
+             (kill-buffer buf)))))))
+
+(defun helm-mpd-command-match (candidate)
+  "Match CANDIDATE with the first word of `helm-pattern'."
+  (let ((ptn (car (split-string helm-pattern nil t))))
+    (or (null ptn)
+        (string-match ptn candidate))))
+
+(defun helm-mpd-command-filtered-candidate-transformer (candidates source)
+  "Compose CANDIDATE and `helm-pattern' but the first word."
+  (let ((args (cdr (split-string helm-pattern nil t))))
+    (if args
+        (let ((tail (mapconcat 'identity (cons "" args) " ")))
+          (mapcar (lambda (x)
+                    (concat x tail))
+                  candidates))
+      candidates)))
+
+(defun helm-mpd-command-action-send (command)
+  "Send COMMAND and display the response."
+  (let ((buf (helm-mpd-retrieve-synchronously command)))
+    (with-current-buffer buf
+      (rename-buffer (format "helm-mpd-response:%s" command)
+                     t)
+      (view-mode)
+      (goto-char (point-min)))
+    (display-buffer buf)))
+
+(defvar helm-source-mpd-command
+  (helm-make-source "Commands" 'helm-source
+    :candidates 'helm-mpd-command-candidates
+    :match '(helm-mpd-command-match)
+    :filtered-candidate-transformer '(helm-mpd-command-filtered-candidate-transformer)
+    :action '(("Send command" . helm-mpd-command-action-send))))
+
+;;;;; Put together
+
 (defvar helm-source-mpd
   '(helm-source-mpd-current-playlist
     helm-source-mpd-songs
-    helm-source-mpd-playlists))
+    helm-source-mpd-playlists
+    helm-source-mpd-command))
 
 ;;;; Entry point
 
