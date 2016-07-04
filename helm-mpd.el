@@ -416,7 +416,8 @@ current helm session without exiting the session."
           `(("C-c a" . ,(helm-mpd-make-command '(helm-mpd-action-add
                                                  helm-mpd-action-load)))
             ("C-c d" . ,(helm-mpd-make-command '(helm-mpd-action-delete)))
-            ("C-c RET" . ,(helm-mpd-make-command '(helm-mpd-action-play)))))
+            ("C-c RET" . ,(helm-mpd-make-command '(helm-mpd-action-play
+                                                   helm-mpd-send-command-synchronously)))))
     m))
 
 ;;;; Helm sources
@@ -535,7 +536,9 @@ current helm session without exiting the session."
     :candidates 'helm-mpd-command-candidates
     :match '(helm-mpd-command-match)
     :filtered-candidate-transformer '(helm-mpd-command-filtered-candidate-transformer)
-    :action '(("Send command" . helm-mpd-command-action-send))))
+    :action '(("Send command" . helm-mpd-command-action-send)
+              ("Send command (discard response)" . helm-mpd-send-command-synchronously))
+    :keymap helm-mpd-source-map))
 
 ;;;;; Put together
 
