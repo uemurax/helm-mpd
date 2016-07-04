@@ -524,7 +524,12 @@ Called interactively with a prefix argument, prompt address family, host and por
   (when (plist-member args :service)
     (setq helm-mpd-connection-port (plist-get args :service)))
   (helm :sources helm-source-mpd
-        :buffer "*helm-mpd*"
+        :buffer (format "*helm-mpd:%s*"
+                        (if (eq helm-mpd-connection-family 'local)
+                            helm-mpd-connection-port
+                          (format "%s:%s"
+                                  helm-mpd-connection-host
+                                  helm-mpd-connection-port)))
         :keymap helm-mpd-map
         :truncate-lines t))
 
