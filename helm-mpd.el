@@ -2,10 +2,53 @@
 ;;
 ;; Copyright (C) 2016 Taichi Uemura
 ;;
-;; Version: 0.1
+;; Version: 1.0
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
 ;; Package-Requires: ((helm-core "1.9.7"))
-;; License: GPL3
+;;
+;; This program is free software: you can redistribute it and/or modify
+;; it under the terms of the GNU General Public License as published by
+;; the Free Software Foundation, either version 3 of the License, or
+;; (at your option) any later version.
+;; 
+;; This program is distributed in the hope that it will be useful,
+;; but WITHOUT ANY WARRANTY; without even the implied warranty of
+;; MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+;; GNU General Public License for more details.
+;; 
+;; You should have received a copy of the GNU General Public License
+;; along with this program.  If not, see <http://www.gnu.org/licenses/>.
+;;
+;;; Commentary:
+;;
+;; `helm-mpd' is a helm interface for [Music Player Daemon](https://www.musicpd.org/).
+;;
+;; Sources
+;; -------
+;;
+;; The main function is `helm-mpd'. It has several sources.
+;;
+;; `helm-source-mpd-current-playlist':
+;; The list of songs in current playlist. Available actions are playing selected
+;; song and deleting marked songs.
+;;
+;; `helm-source-mpd-songs':
+;; The list of songs and directories in MPD database. Available actions are adding
+;; marked songs and directories.
+;;
+;; `helm-source-mpd-playlists':
+;; The list of playlists in MPD database. Available actions are loading marked
+;; playlists.
+;;
+;; `helm-source-mpd-command':
+;; The list of MPD commands.
+;;
+;; Tag search
+;; ----------
+;;
+;; `helm-mpd' supports tag search with regular expression. An input "<TAG>PATTERN"
+;; matches objects that has a tag like TAG whose value is like PATTERN. For PATTERN
+;; you can use `migemo'. Turn on `helm-migemo-mode'.
 ;;
 ;;; Code:
 
