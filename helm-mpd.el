@@ -53,6 +53,7 @@
 ;;; Code:
 
 (require 'helm)
+(eval-when-compile (require 'cl))
 
 (defgroup helm-mpd ()
   "Helm interface for Music Player Daemon."
@@ -156,7 +157,9 @@ ARGS are same as `helm-mpd-send-command'."
             (let ((key (match-string 1))
                   (value (match-string 2)))
               (with-current-buffer buf
-                (when (seq-position helm-mpd-item-keywords key 'equal)
+                (when (cl-loop for k in helm-mpd-item-keywords
+                               when (equal k key)
+                               return k)
                   (up-list)
                   (insert "()")
                   (backward-char 1))
@@ -292,12 +295,12 @@ If non-nil, try to use the previous result for CMD."
                     (t
                      (lambda (x)
                        (funcall mfn1 pattern (cdr x)))))))
-    (seq-filter mfn object)))
+    (cl-loop for y in object
+             thereis (funcall mfn y))))
 
 (defun helm-mpd-match-function (pattern object &optional migemo)
-  (not (seq-filter (lambda (p)
-                     (not (helm-mpd-match-function-1 p object migemo)))
-                   (split-string pattern))))
+  (cl-loop for p in (split-string pattern)
+           always (helm-mpd-match-function-1 p object migemo)))
 
 (defun helm-mpd-match (candidate)
   "Match function.
@@ -430,9 +433,9 @@ current helm session without exiting the session."
       (interactive)
       (with-helm-alive-p
         (let* ((helm-action (helm-get-actions-from-current-source))
-               (action (seq-find (lambda (a)
-                                   (rassq a helm-action))
-                                 actions)))
+               (action (cl-loop for a in actions
+                                when (rassq a helm-action)
+                                return a)))
           (if action
               (progn
                 (helm-attrset 'helm-mpd-persistent-action action)
