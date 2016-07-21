@@ -597,12 +597,17 @@ The default bindings are following.
                   candidates))
       candidates)))
 
+(defun helm-mpd-command-rename-buffer (command)
+  (let ((name (format "helm-mpd-response:%s" command)))
+    (when (get-buffer name)
+      (kill-buffer name))
+    (rename-buffer name)))
+
 (defun helm-mpd-command-action-send (command)
   "Send COMMAND and display the response."
   (let ((buf (helm-mpd-retrieve-synchronously command)))
     (with-current-buffer buf
-      (rename-buffer (format "helm-mpd-response:%s" command)
-                     t)
+      (helm-mpd-command-rename-buffer command)
       (view-mode)
       (goto-char (point-min)))
     (display-buffer buf)))
