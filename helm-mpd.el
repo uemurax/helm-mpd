@@ -376,7 +376,7 @@ To specify a tag, input \"<TAG>PATTERN\"."
   "Delete the selected candidates from the current playlist."
   (helm-mpd-send-command (concat "command_list_begin\n"
                                  (mapconcat (lambda (c)
-                                              (format "deleteid %s"
+                                              (format "deleteid \"%s\""
                                                       (cdr (assq 'Id c))))
                                             (helm-marked-candidates)
                                             "\n")
@@ -394,7 +394,7 @@ To specify a tag, input \"<TAG>PATTERN\"."
   "Add the selected candidates to the current playlist."
   (helm-mpd-send-command (concat "command_list_begin\n"
                                  (mapconcat (lambda (c)
-                                              (format "add %s"
+                                              (format "add \"%s\""
                                                       (cdr (or (assq 'file c)
                                                                (assq 'directory c)))))
                                             (helm-marked-candidates)
@@ -412,7 +412,7 @@ To specify a tag, input \"<TAG>PATTERN\"."
   "Load the selected playlists."
   (helm-mpd-send-command (concat "command_list_begin\n"
                                  (mapconcat (lambda (c)
-                                              (format "load %s"
+                                              (format "load \"%s\""
                                                       (cdr (assq 'playlist c))))
                                             (helm-marked-candidates)
                                             "\n")
