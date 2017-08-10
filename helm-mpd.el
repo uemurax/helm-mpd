@@ -4,7 +4,7 @@
 ;;
 ;; Version: 1.0
 ;; Author: Taichi Uemura <t.uemura00@gmail.com>
-;; Package-Requires: ((helm-core "1.9.7"))
+;; Package-Requires: (helm-core)
 ;;
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -498,7 +498,7 @@ The default bindings are following.
 (defclass helm-source-mpd-base (helm-source)
   ((candidates :initform (lambda ()
                            (helm-mpd-candidates-synchronously (helm-attr 'mpd-command)
-                                                              :cache (helm-attr-defined 'mpd-cache))))
+                                                              :cache (helm-attr 'mpd-cache))))
    (action :initform 'helm-mpd-object-action)
    (action-transformer :initform '(helm-mpd-action-transformer-playlist
                                    helm-mpd-action-transformer-song
@@ -557,7 +557,7 @@ The default bindings are following.
 (defvar helm-source-mpd-songs
   (helm-make-source "Songs" 'helm-source-mpd-base
     :mpd-command "listallinfo"
-    :mpd-cache t))
+    :mpd-cache 1))
 (defvar helm-source-mpd-playlists
   (helm-make-source "Playlists" 'helm-source-mpd-base
     :mpd-command "listplaylists"))
