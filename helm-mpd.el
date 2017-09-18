@@ -263,9 +263,11 @@ If non-nil, try to use the previous result for CMD."
         ((assq 'playlist object)
          (propertize (cdr (assq 'playlist object))
                      'face 'helm-mpd-playlist-face))
-        (t
+        ((assq 'Title object)
          (helm-mpd-format-object object (with-helm-window
-                                          (window-text-width))))))
+                                          (window-text-width))))
+        (t
+         (cdr (assq 'file object)))))
 
 (defcustom helm-mpd-display-object-function
   'helm-mpd-display-object-default
